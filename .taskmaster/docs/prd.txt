@@ -1,0 +1,210 @@
+# NutritionTrackerV2 Product Requirements Document
+
+## Overview
+NutritionTrackerV2 is a fresh rebuild of the existing iOS nutrition tracking application, migrating from Parse Server (Back4App) to Supabase backend. This internal tool enables users to log food consumption, track comprehensive nutritional data, and analyze daily dietary intake with advanced features including ML-powered food recognition and OCR capabilities for nutrition labels. The rebuild provides a modern, scalable foundation while preserving all existing functionality and ensuring seamless data migration.
+
+## Core Features
+### Authentication System
+- **Email/password authentication** via Supabase Auth
+- **User profile management** with custom fields support
+- **Secure session handling** with automatic token refresh
+- **Account creation and login flows** matching existing UX patterns
+
+### Food Database Management
+- **Comprehensive food catalog** with 25+ nutritional properties per food item
+- **CRUD operations** for food items with real-time synchronization
+- **Advanced search and filtering** capabilities across food database
+- **Serving size and measurement unit** tracking for accurate portion control
+
+### Food Logging System
+- **Daily food consumption tracking** with date-based organization
+- **Photo integration** for food logs using Supabase Storage
+- **Serving size calculations** with automatic nutritional scaling
+- **Historical log viewing** with calendar-based navigation
+
+### Nutritional Analytics
+- **Real-time daily statistics** aggregating all logged foods
+- **Macro and micronutrient tracking** including vitamins and minerals
+- **Progress visualization** with charts and progress indicators
+- **Nutritional target comparison** against recommended daily values
+
+### Advanced Capabilities
+- **ML-powered food recognition** using existing trained models
+- **OCR nutrition label scanning** for automatic data entry
+- **Camera integration** for food photography and label capture
+- **Real-time data synchronization** across devices using Supabase subscriptions
+
+## User Experience
+### User Personas
+- **Primary User**: Health-conscious individuals tracking dietary intake for personal wellness
+- **Internal Team**: Development team members using the app for testing and validation
+
+### Key User Flows
+1. **Authentication Flow**: Login/signup → Profile setup → Main dashboard
+2. **Food Logging Flow**: Camera capture → Food recognition/manual entry → Serving size selection → Save log
+3. **Analytics Flow**: Daily view → Nutrient breakdown → Historical trends → Target comparisons
+4. **Food Management Flow**: Search foods → View details → Add to log or edit information
+
+### UI/UX Considerations
+- **Preserve existing design patterns** from NutritionTracker for consistency
+- **Maintain SwiftUI-based interface** with modern iOS design principles
+- **Ensure seamless transitions** between camera, forms, and data views
+- **Optimize for quick food logging** with minimal friction workflows
+
+## Technical Architecture
+### System Components
+- **iOS App**: SwiftUI-based client application
+- **Supabase Backend**: PostgreSQL database with real-time subscriptions
+- **Authentication**: Supabase Auth with JWT tokens
+- **File Storage**: Supabase Storage for food and log photos
+- **ML Models**: Core ML integration for food recognition and OCR
+
+### Data Models
+```sql
+-- Profiles table (extends Supabase Auth users)
+profiles: id (UUID), username, custom_key, timestamps
+
+-- Foods table with comprehensive nutrition data
+foods: id (UUID), name, serving_size, measurement_unit,
+       macronutrients (calories, protein, fats, carbs),
+       micronutrients (25+ vitamins/minerals), photo_url, timestamps
+
+-- Food logs table linking users to consumed foods
+food_logs: id (UUID), user_id, food_id, date, serving_size,
+           photo_url, timestamps
+```
+
+### APIs and Integrations
+- **Supabase Client SDK** for all backend communication
+- **Supabase Auth** for user management and session handling
+- **Supabase Storage** for file upload and retrieval
+- **Core ML Framework** for on-device food recognition
+- **Vision Framework** for OCR text recognition
+
+### Infrastructure Requirements
+- **Supabase Project** with PostgreSQL database
+- **Storage Bucket** configured for food photos
+- **Row Level Security** policies for data access control
+- **Real-time subscriptions** enabled for live data updates
+
+## Development Roadmap
+### Phase 1: Foundation & Authentication
+**Scope**: Establish core infrastructure and user authentication
+- Setup Supabase project with database schema and security policies
+- Integrate Supabase Swift SDK via Swift Package Manager
+- Implement email/password authentication with Supabase Auth
+- Create user profile management system
+- Build basic app navigation structure and routing
+- Test authentication flow end-to-end with error handling
+
+### Phase 2: Data Layer & Models
+**Scope**: Build robust data foundation for all app functionality
+- Design and implement Supabase-first data models (Food, FoodLog, Profile)
+- Create data service layer using modern Swift concurrency (async/await)
+- Implement CRUD operations for foods with proper error handling
+- Add advanced querying capabilities for food search and filtering
+- Setup real-time subscriptions for live data updates
+- Validate data layer with comprehensive testing
+
+### Phase 3: Core UI Implementation
+**Scope**: Port and adapt existing user interface components
+- Copy and adapt food list and detail views from original project
+- Implement food form and logging interfaces
+- Create daily stats and analytics views
+- Update ViewModels to integrate with new Supabase data layer
+- Ensure UI components maintain existing design patterns and user experience
+- Test complete user workflows from authentication through food logging
+
+### Phase 4: Advanced Features Integration
+**Scope**: Integrate ML capabilities and photo functionality
+- Port existing FoodImageClassifier.swift from original project
+- Implement camera integration for food photography
+- Add OCR capabilities for nutrition label scanning
+- Setup photo upload and retrieval using Supabase Storage
+- Integrate real-time features for live data synchronization
+- Test ML features and photo workflows thoroughly
+
+### Phase 5: Data Migration & Validation
+**Scope**: Migrate existing data from Parse Server to Supabase
+- Develop Node.js scripts for Parse data export (users, foods, food_logs)
+- Create Supabase import scripts with data transformation
+- Implement photo migration from ParseFiles to Supabase Storage
+- Build validation scripts to ensure data integrity post-migration
+- Execute production data migration with rollback procedures
+- Validate complete data migration with user acceptance testing
+
+
+## Logical Dependency Chain
+### Foundation First (Phase 1)
+- **Supabase project setup** must be completed before any other development
+- **Authentication system** is prerequisite for all user-dependent features
+- **Database schema** must be established before data layer implementation
+
+### Quick Visible Progress (Phase 2-3)
+- **Data layer completion** enables immediate UI development and testing
+- **Core UI implementation** provides visible progress and functional app shell
+- **Food logging workflow** represents first complete user journey
+
+### Feature Building (Phase 4)
+- **ML integration** requires stable data layer and UI foundation
+- **Photo functionality** depends on Supabase Storage setup and UI components
+- **Real-time features** enhance existing functionality without blocking core features
+
+### Data Preservation (Phase 5)
+- **Migration scripts** require completed Supabase schema and validation
+- **Data migration** must occur after all core features are stable
+- **Production migration** represents point of no return requiring comprehensive testing
+
+
+## Risks and Mitigations
+### Technical Challenges
+**Risk**: Complex data model migration from document-based Parse to relational PostgreSQL
+**Mitigation**: Create comprehensive mapping scripts with thorough testing and validation procedures
+
+**Risk**: ML model integration compatibility issues with new architecture
+**Mitigation**: Copy existing working ML integration directly with minimal modifications
+
+**Risk**: Photo migration complexity from ParseFiles to Supabase Storage
+**Mitigation**: Implement incremental photo migration with fallback to original URLs during transition
+
+### MVP Definition and Scope
+**Risk**: Feature creep beyond core nutrition tracking functionality
+**Mitigation**: Maintain strict focus on preserving existing functionality without enhancements
+
+**Risk**: Over-engineering data layer for future requirements
+**Mitigation**: Build exactly what current features require with clear extension points
+
+**Risk**: Authentication complexity delaying core feature development
+**Mitigation**: Use Supabase Auth defaults with minimal customization initially
+
+### Resource and Timeline Constraints
+**Risk**: 13-day timeline may be aggressive for complete migration
+**Mitigation**: Prioritize core functionality over advanced features, with fallback plan for extended timeline
+
+**Risk**: Single developer dependency creating bottlenecks
+**Mitigation**: Structure phases to enable parallel development of independent components
+
+**Risk**: Data migration requiring Parse server access during transition
+**Mitigation**: Coordinate migration during low-usage periods with proper backup procedures
+
+## Appendix
+### Research Findings
+- **Supabase provides direct PostgreSQL access** enabling complex nutritional queries
+- **Row Level Security** offers granular user data protection
+- **Real-time subscriptions** can enhance user experience with live updates
+- **Swift Package Manager integration** eliminates CocoaPods dependency management
+
+### Technical Specifications
+- **Minimum iOS Version**: iOS 15.0 (supporting async/await)
+- **Supabase SDK**: Latest stable Swift SDK via SPM
+- **Database**: PostgreSQL 15+ with UUID primary keys
+- **Storage**: Supabase Storage with public read access for food photos
+- **Authentication**: Supabase Auth with email/password provider
+
+### Migration Data Mapping
+```
+Parse User → Supabase profiles (username, custom_key)
+Parse Food → Supabase foods (all 25+ nutrition fields)
+Parse FoodLog → Supabase food_logs (user_id, food_id references)
+ParseFile → Supabase Storage URLs (food photos, log photos)
+```

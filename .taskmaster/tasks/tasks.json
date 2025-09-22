@@ -1,0 +1,621 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Setup Supabase Project and Database Schema",
+        "description": "Initialize Supabase project with PostgreSQL database, create tables for profiles, foods, and food_logs with proper relationships and constraints",
+        "details": "Create new Supabase project, setup PostgreSQL database with three core tables: profiles (id UUID, username, custom_key, timestamps), foods (id UUID, name, serving_size, measurement_unit, macronutrients, 25+ micronutrient fields, photo_url, timestamps), food_logs (id UUID, user_id UUID FK, food_id UUID FK, date, serving_size, photo_url, timestamps). Configure Row Level Security policies for data access control. Enable real-time subscriptions for live updates. Setup proper foreign key relationships and indexes for performance.",
+        "testStrategy": "Verify database schema creation, test RLS policies with different user contexts, validate foreign key constraints and data relationships",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create Supabase project and configure basic settings",
+            "description": "Initialize new Supabase project, configure basic settings, and obtain project credentials",
+            "dependencies": [],
+            "details": "Create new Supabase project through dashboard, configure project name and region, obtain project URL and anon key, setup basic project settings and security configurations",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Design and create profiles table with RLS policies",
+            "description": "Create profiles table with proper schema and implement Row Level Security policies",
+            "dependencies": [
+              "1.1"
+            ],
+            "details": "Create profiles table with id UUID, username, custom_key, created_at, updated_at fields. Implement RLS policies for user data access control. Configure authentication-based access rules",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Design and create foods table with micronutrient fields",
+            "description": "Create comprehensive foods table with 25+ micronutrient fields and macronutrient data",
+            "dependencies": [
+              "1.1"
+            ],
+            "details": "Create foods table with id UUID, name, serving_size, measurement_unit, macronutrients (protein, carbs, fat, calories), 25+ micronutrient fields (vitamins, minerals), photo_url, timestamps. Setup proper data types and constraints",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Design and create food_logs table with relationships",
+            "description": "Create food_logs table with proper foreign key relationships to profiles and foods tables",
+            "dependencies": [
+              "1.2",
+              "1.3"
+            ],
+            "details": "Create food_logs table with id UUID, user_id UUID FK to profiles, food_id UUID FK to foods, date, serving_size, photo_url, timestamps. Setup foreign key constraints and RLS policies for user-specific data access",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Setup indexes, constraints, and real-time subscriptions",
+            "description": "Configure database performance optimizations and enable real-time functionality",
+            "dependencies": [
+              "1.4"
+            ],
+            "details": "Create indexes on foreign keys and frequently queried fields. Setup performance constraints and validation rules. Enable real-time subscriptions on all tables for live data updates. Configure proper indexing strategy for optimal query performance",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Integrate Supabase Swift SDK",
+        "description": "Add Supabase Swift SDK to iOS project via Swift Package Manager and configure connection to Supabase backend",
+        "details": "Add Supabase Swift SDK via Swift Package Manager to existing iOS project. Configure Supabase client with project URL and anon key. Create SupabaseManager singleton class to handle all backend communications. Setup proper error handling and logging for network requests. Configure async/await patterns for modern Swift concurrency. Add necessary Info.plist entries for network security if needed.",
+        "testStrategy": "Test Supabase client initialization, verify network connectivity to backend, validate SDK integration with simple query operations",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Add Supabase Swift SDK via Swift Package Manager",
+            "description": "Integrate Supabase Swift SDK into the iOS project using Swift Package Manager and verify successful installation",
+            "dependencies": [],
+            "details": "Open Xcode project and navigate to Package Dependencies. Add Supabase Swift SDK from GitHub repository (https://github.com/supabase/supabase-swift). Verify the SDK is properly added to project targets and imports are working. Ensure all necessary Supabase modules are available for use in the project.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Create SupabaseManager singleton with client configuration",
+            "description": "Implement SupabaseManager singleton class to handle Supabase client initialization and backend communications",
+            "dependencies": [
+              "2.1"
+            ],
+            "details": "Create SupabaseManager class as singleton pattern with Supabase client configuration using project URL and anon key. Implement client initialization method with proper configuration settings. Add methods for common database operations and ensure thread-safe access to the singleton instance. Store Supabase credentials securely and configure client options for optimal performance.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Setup error handling, logging, and async/await patterns with network security",
+            "description": "Configure comprehensive error handling, logging system, and modern Swift concurrency patterns with necessary network security settings",
+            "dependencies": [
+              "2.2"
+            ],
+            "details": "Implement custom error types for Supabase operations and network failures. Add comprehensive logging system for debugging and monitoring. Configure async/await patterns for all Supabase operations using modern Swift concurrency. Add necessary Info.plist entries for App Transport Security if required for network communications. Create error handling utilities and logging infrastructure for consistent error management across the application.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Implement Authentication System",
+        "description": "Build email/password authentication using Supabase Auth with user profile management and secure session handling",
+        "details": "Implement AuthManager class using Supabase Auth for email/password authentication. Create login and signup flows matching existing UX patterns. Add automatic token refresh and secure session handling. Implement user profile creation in profiles table upon signup. Add logout functionality and session state management. Create AuthenticationView and SignupView SwiftUI components. Handle authentication errors gracefully with user-friendly messages.",
+        "testStrategy": "Test complete authentication flow including signup, login, logout, and session persistence. Verify profile creation and error handling scenarios",
+        "priority": "high",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create AuthManager class with Supabase Auth integration",
+            "description": "Implement core authentication manager using Supabase Auth SDK for email/password authentication operations",
+            "dependencies": [],
+            "details": "Create AuthManager singleton class that wraps Supabase Auth functionality. Implement signup, login, logout, and session retrieval methods using async/await patterns. Add proper error handling for authentication failures and network issues. Configure automatic token refresh mechanism. Include methods for checking authentication state and retrieving current user information.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Build login and signup SwiftUI views with existing UX patterns",
+            "description": "Create AuthenticationView and SignupView SwiftUI components following established design patterns",
+            "dependencies": [
+              "3.1"
+            ],
+            "details": "Build AuthenticationView with email/password input fields, login button, and navigation to signup. Create SignupView with email, password, confirm password fields and signup button. Follow existing UX patterns for styling, layout, and user interactions. Add form validation for email format and password requirements. Implement loading states during authentication requests.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement session management with automatic token refresh",
+            "description": "Add comprehensive session handling with automatic token refresh and state persistence",
+            "dependencies": [
+              "3.1"
+            ],
+            "details": "Implement session state management using Combine publishers for reactive updates. Add automatic token refresh logic that handles expired sessions transparently. Implement secure session persistence across app launches. Create session state observers that update UI based on authentication status. Add proper cleanup of session data on logout.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Add user profile creation and error handling with graceful user feedback",
+            "description": "Implement user profile creation upon signup and comprehensive error handling with user-friendly messaging",
+            "dependencies": [
+              "3.1",
+              "3.2"
+            ],
+            "details": "Create user profile record in profiles table automatically upon successful signup. Implement comprehensive error handling for all authentication scenarios including network failures, invalid credentials, and account conflicts. Add user-friendly error messages and alerts. Create loading indicators and success feedback. Handle edge cases like weak network connectivity and server errors gracefully.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Create Data Service Layer",
+        "description": "Build comprehensive data service layer with CRUD operations for Food and FoodLog models using modern Swift concurrency",
+        "details": "Create FoodService and FoodLogService classes implementing async/await patterns. Build CRUD operations: createFood, updateFood, deleteFood, getFoodById, searchFoods with advanced filtering. Implement FoodLog operations: createFoodLog, getFoodLogsForDate, updateFoodLog, deleteFoodLog. Add proper error handling with custom error types. Implement caching strategy for frequently accessed foods. Create data models (Food, FoodLog, Profile) matching Supabase schema with Codable conformance.",
+        "testStrategy": "Unit test all CRUD operations, verify data persistence, test error handling and edge cases, validate search and filtering functionality",
+        "priority": "high",
+        "dependencies": [
+          3
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create Core Data Models",
+            "description": "Implement Food, FoodLog, and Profile data models with Codable conformance matching Supabase schema",
+            "dependencies": [],
+            "details": "Create Swift structs/classes for Food (with all nutritional fields), FoodLog, and Profile models. Ensure all models conform to Codable protocol for JSON serialization. Match field names and types exactly with Supabase database schema. Include proper UUID handling, optional fields, and timestamp formatting. Add computed properties for common operations like nutritional scaling.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement Custom Error Handling",
+            "description": "Create comprehensive error types and handling system for data service operations",
+            "dependencies": [],
+            "details": "Define custom error enums for network errors, data validation errors, authentication errors, and parsing errors. Create error handling protocols and extension methods for common error scenarios. Implement proper error propagation through async/await patterns. Add user-friendly error messages and logging for debugging purposes.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Build FoodService with CRUD Operations",
+            "description": "Implement FoodService class with complete CRUD operations and advanced search functionality",
+            "dependencies": [
+              "4.1",
+              "4.2"
+            ],
+            "details": "Create FoodService class with async/await methods: createFood, updateFood, deleteFood, getFoodById, and searchFoods. Implement advanced filtering options for search (by name, nutritional content, etc.). Add proper parameter validation and error handling. Include batch operations for bulk food management. Integrate with Supabase client for backend communication.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Build FoodLogService with Date-Based Operations",
+            "description": "Implement FoodLogService class with date-specific CRUD operations for food logging",
+            "dependencies": [
+              "4.1",
+              "4.2"
+            ],
+            "details": "Create FoodLogService class with methods: createFoodLog, getFoodLogsForDate, updateFoodLog, deleteFoodLog. Implement date range queries and daily aggregation functions. Add serving size calculation helpers and nutritional scaling operations. Include real-time subscription capabilities for live updates. Handle timezone considerations for date-based queries.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement Caching Strategy",
+            "description": "Add intelligent caching layer for frequently accessed foods and optimized data retrieval",
+            "dependencies": [
+              "4.3"
+            ],
+            "details": "Implement in-memory caching for frequently accessed food items using NSCache or similar mechanism. Create cache invalidation strategies and TTL policies. Add cache-first data retrieval patterns with fallback to network requests. Implement search result caching and smart preloading of popular foods. Include cache size management and memory pressure handling.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Create Unit Tests for Service Layer",
+            "description": "Implement comprehensive unit tests covering all service operations and error scenarios",
+            "dependencies": [
+              "4.3",
+              "4.4",
+              "4.5"
+            ],
+            "details": "Create unit test suites for FoodService and FoodLogService covering all CRUD operations. Test error handling scenarios, edge cases, and boundary conditions. Mock Supabase client for isolated testing. Test caching behavior and cache invalidation. Verify data model serialization/deserialization. Include performance tests for search operations and bulk data handling.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Setup Supabase Storage for Photos",
+        "description": "Configure Supabase Storage bucket for food and log photos with upload, download, and URL generation capabilities",
+        "details": "Create public storage bucket in Supabase for food photos. Implement PhotoService class for image upload/download operations. Add image compression and resizing before upload to optimize storage. Create secure file naming convention using UUIDs. Implement photo URL generation for displaying images. Add proper error handling for upload failures and network issues. Setup bucket policies for public read access while maintaining upload security.",
+        "testStrategy": "Test photo upload and download functionality, verify image compression, validate URL generation and public access",
+        "priority": "medium",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create and Configure Supabase Storage Bucket",
+            "description": "Setup Supabase storage bucket with proper policies for public read access and secure uploads",
+            "dependencies": [],
+            "details": "Create a new storage bucket in Supabase dashboard named 'food-photos'. Configure bucket policies to allow public read access while restricting upload permissions to authenticated users. Set up proper CORS settings for iOS app access. Configure bucket settings for optimal performance and security.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement PhotoService Class with Upload/Download Operations",
+            "description": "Create PhotoService class to handle all photo upload and download operations with Supabase Storage",
+            "dependencies": [
+              "5.1"
+            ],
+            "details": "Implement PhotoService singleton class with methods for uploading photos to Supabase Storage, downloading photos by file path, and managing upload progress. Include proper async/await patterns for Swift concurrency. Add authentication handling for secure uploads and comprehensive error handling for network failures.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Add Image Compression and UUID File Naming",
+            "description": "Implement image compression/resizing and secure UUID-based file naming convention",
+            "dependencies": [
+              "5.2"
+            ],
+            "details": "Add image compression functionality to reduce file sizes before upload using UIImage compression. Implement automatic image resizing to standard dimensions (e.g., 800x600) for consistency. Create UUID-based file naming system to ensure unique filenames and prevent conflicts. Add image format optimization (JPEG with configurable quality).",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement URL Generation and Error Handling",
+            "description": "Create photo URL generation for displaying images and comprehensive error handling for upload failures",
+            "dependencies": [
+              "5.3"
+            ],
+            "details": "Implement methods to generate public URLs for uploaded photos that can be used in UI components. Add comprehensive error handling for upload failures, network issues, and storage quota limits. Create retry logic for failed uploads and user-friendly error messages. Include progress tracking and cancellation support for ongoing uploads.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Port and Adapt Core UI Components",
+        "description": "Copy and adapt existing food list, detail views, and forms from original project to work with new Supabase data layer",
+        "details": "Copy FoodListView, FoodDetailView, and FoodFormView from original NutritionTracker project. Update ViewModels (FoodListViewModel, FoodDetailViewModel) to use new Supabase data services instead of Parse. Maintain existing SwiftUI design patterns and user experience. Update data binding to work with new Food model structure. Preserve all UI animations and transitions. Ensure proper loading states and error handling in UI components.",
+        "testStrategy": "Test all UI components with new data layer, verify existing design patterns are preserved, validate user interactions and navigation flows",
+        "priority": "high",
+        "dependencies": [
+          4
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Copy and Adapt FoodListView with FoodListViewModel",
+            "description": "Port FoodListView and FoodListViewModel from original project and update to use Supabase data services",
+            "dependencies": [],
+            "details": "Copy FoodListView.swift and FoodListViewModel.swift from original NutritionTracker project. Update FoodListViewModel to use SupabaseFoodService instead of Parse-based data layer. Maintain existing SwiftUI design patterns, list structure, and search functionality. Update data binding to work with new Food model from Supabase. Ensure proper ObservableObject conformance and @Published properties for reactive UI updates.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Copy and Adapt FoodDetailView with Data Binding Updates",
+            "description": "Port FoodDetailView and update data binding to work with new Supabase Food model structure",
+            "dependencies": [
+              "6.1"
+            ],
+            "details": "Copy FoodDetailView.swift from original project. Update all data binding references to match new Food model properties from Supabase schema. Ensure nutrition facts display correctly with new micronutrient field structure. Update navigation and data passing from FoodListView. Maintain existing design layout and user experience patterns.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Copy and Adapt FoodFormView with New Food Model Structure",
+            "description": "Port FoodFormView and update form fields to work with new Supabase Food model and data services",
+            "dependencies": [
+              "6.2"
+            ],
+            "details": "Copy FoodFormView.swift from original project. Update form fields and validation to match new Food model structure from Supabase. Integrate with SupabaseFoodService for create/update operations. Update form binding to work with new micronutrient field structure. Maintain existing form layout, validation patterns, and user input handling.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Ensure UI Animations, Transitions, and Loading States",
+            "description": "Verify and adapt all UI animations, transitions, and loading states to work properly with new Supabase data layer",
+            "dependencies": [
+              "6.3"
+            ],
+            "details": "Review and test all existing UI animations and transitions in ported components. Update loading states to properly reflect Supabase async operations. Ensure smooth navigation transitions between views. Add proper error handling UI states for Supabase network operations. Verify loading indicators and empty states work correctly with new data services. Maintain existing animation timing and visual feedback patterns.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Implement Food Logging Interface",
+        "description": "Create food logging interface with date-based organization, serving size calculations, and daily statistics",
+        "details": "Build FoodLogView for daily food consumption tracking. Implement calendar-based navigation for historical log viewing. Create serving size selector with automatic nutritional scaling calculations. Build daily statistics view aggregating logged foods with macro/micronutrient totals. Add real-time updates when foods are logged. Implement date picker for backdating food logs. Create intuitive workflow from food selection to serving size entry to final logging.",
+        "testStrategy": "Test complete food logging workflow, verify serving size calculations accuracy, validate daily statistics aggregation and real-time updates",
+        "priority": "high",
+        "dependencies": [
+          6
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Build FoodLogView with Daily Food Consumption Tracking",
+            "description": "Create the main food logging interface showing daily food entries with add/remove functionality",
+            "dependencies": [],
+            "details": "Build FoodLogView as the primary interface for daily food consumption tracking. Create list view to display logged foods for selected date. Implement add food button leading to food selection. Add swipe-to-delete functionality for removing logged foods. Include visual indicators for meal categories (breakfast, lunch, dinner, snacks). Design clean, intuitive layout matching app's design system.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement Calendar-based Navigation for Historical Viewing",
+            "description": "Add date navigation controls allowing users to view food logs from previous days",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "Implement calendar-based navigation system for viewing historical food logs. Add date picker component allowing users to select any past or future date. Create smooth transitions between dates with loading states. Implement swipe gestures for quick day-to-day navigation. Add visual indicators showing which dates have logged foods. Ensure proper state management when switching between dates.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Create Serving Size Selector with Automatic Nutritional Scaling",
+            "description": "Build serving size selection interface with real-time nutritional value calculations",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "Create serving size selector component with multiple unit options (grams, cups, pieces, etc.). Implement real-time nutritional scaling calculations based on selected serving size. Add quantity input with stepper controls and direct text entry. Display calculated nutritional values (calories, macros, micros) updating live as serving size changes. Include common serving size presets for quick selection. Validate inputs and handle edge cases gracefully.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Build Daily Statistics Aggregation View with Macro/Micronutrient Totals",
+            "description": "Create comprehensive daily nutrition summary showing aggregated totals and progress toward goals",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "Build daily statistics view aggregating all logged foods into comprehensive nutritional totals. Display macro breakdown (calories, protein, carbs, fats) with progress bars toward daily goals. Show key micronutrients (vitamins, minerals) with percentage of daily values. Create visual charts and graphs for easy interpretation. Include meal-by-meal breakdown showing distribution throughout the day. Add goal comparison indicators showing over/under target values.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Add Date Picker for Backdating and Real-time Updates for Logged Foods",
+            "description": "Implement backdating functionality and real-time updates when foods are logged or modified",
+            "dependencies": [
+              "7.2",
+              "7.3",
+              "7.4"
+            ],
+            "details": "Add date picker functionality allowing users to backdate food entries to previous days. Implement real-time updates throughout the interface when foods are logged, modified, or deleted. Update daily statistics immediately when changes occur. Refresh food log list and recalculate totals automatically. Add visual feedback for successful operations. Ensure proper error handling and user notification for failed operations. Implement optimistic updates for smooth user experience.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Port ML Food Recognition System",
+        "description": "Copy existing FoodImageClassifier from original project and integrate with camera functionality for food recognition",
+        "details": "Copy FoodImageClassifier.swift from original NutritionTracker project without modifications. Integrate Core ML framework for on-device food recognition. Create CameraView SwiftUI component for food photography. Implement image preprocessing pipeline for ML model input. Add confidence scoring and fallback to manual food selection. Create seamless workflow from camera capture to food recognition to logging. Handle ML model loading and prediction errors gracefully.",
+        "testStrategy": "Test ML model integration, verify food recognition accuracy, validate camera functionality and image processing pipeline",
+        "priority": "medium",
+        "dependencies": [
+          5,
+          7
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Copy FoodImageClassifier and integrate Core ML framework",
+            "description": "Copy FoodImageClassifier.swift from original project and set up Core ML framework integration for on-device food recognition",
+            "dependencies": [],
+            "details": "Copy FoodImageClassifier.swift file without modifications from original NutritionTracker project. Import Core ML framework and ensure proper model loading. Set up error handling for model initialization failures. Verify Core ML model file is included in app bundle and properly configured.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Create CameraView SwiftUI component for food photography",
+            "description": "Build SwiftUI camera interface component for capturing food photos with proper camera permissions and controls",
+            "dependencies": [],
+            "details": "Create CameraView SwiftUI component using AVFoundation for camera functionality. Implement camera permission handling and user-friendly permission denied states. Add photo capture controls and preview functionality. Ensure camera view integrates seamlessly with existing UI patterns and navigation flow.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement image preprocessing pipeline for ML model input",
+            "description": "Create image processing pipeline to prepare captured photos for ML model prediction with proper resizing and formatting",
+            "dependencies": [
+              "8.1",
+              "8.2"
+            ],
+            "details": "Implement image preprocessing functions to resize, crop, and format images for ML model input requirements. Add image normalization and color space conversion as needed. Create efficient image processing pipeline that maintains image quality while meeting model input specifications. Handle various image orientations and aspect ratios.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Create workflow from camera capture to food recognition to logging",
+            "description": "Build complete user workflow connecting camera capture, ML recognition, confidence scoring, and food logging with manual fallback options",
+            "dependencies": [
+              "8.1",
+              "8.2",
+              "8.3"
+            ],
+            "details": "Create seamless workflow from camera capture through food recognition to final food logging. Implement confidence scoring system for ML predictions with configurable threshold. Add fallback to manual food selection when confidence is low. Create user-friendly interface for reviewing and confirming ML predictions. Handle prediction errors gracefully with clear user feedback and alternative options.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Add OCR Nutrition Label Scanning",
+        "description": "Implement OCR capabilities using Vision framework for automatic nutrition label data entry",
+        "details": "Integrate Vision framework for text recognition from nutrition labels. Create OCRService class for extracting nutritional information from captured images. Implement text parsing logic to identify calories, macronutrients, and serving sizes from label text. Build NutritionLabelScanView for capturing and processing nutrition labels. Add manual correction interface for OCR results. Create workflow from camera capture to text extraction to food creation with extracted data.",
+        "testStrategy": "Test OCR accuracy with various nutrition label formats, verify text extraction and parsing logic, validate manual correction interface",
+        "priority": "medium",
+        "dependencies": [
+          8
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Integrate Vision Framework for Text Recognition",
+            "description": "Set up Vision framework integration and implement basic text recognition capabilities for nutrition labels",
+            "dependencies": [],
+            "details": "Import Vision framework and configure VNRecognizeTextRequest for nutrition label text recognition. Set up image preprocessing for optimal OCR accuracy including contrast enhancement and rotation correction. Implement basic text detection and extraction from captured images. Add camera permissions and basic image capture functionality.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Create OCRService Class for Nutritional Information Extraction",
+            "description": "Build dedicated service class to handle OCR operations and coordinate text extraction workflow",
+            "dependencies": [
+              "9.1"
+            ],
+            "details": "Create OCRService class with methods for processing nutrition label images. Implement image quality validation and preprocessing. Add text extraction coordination using Vision framework. Create data structures for storing raw OCR results and confidence scores. Implement error handling for OCR failures and low-quality images.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement Text Parsing Logic for Nutrition Data",
+            "description": "Build intelligent parsing system to extract calories, macronutrients, and serving sizes from OCR text",
+            "dependencies": [
+              "9.2"
+            ],
+            "details": "Create text parsing algorithms to identify nutrition facts sections in OCR results. Implement pattern recognition for calories, protein, carbohydrates, fats, and serving size information. Add unit conversion logic for different measurement formats. Create confidence scoring for parsed nutrition data. Handle various nutrition label formats and layouts with robust parsing rules.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Build NutritionLabelScanView Interface",
+            "description": "Create SwiftUI interface for capturing nutrition labels and displaying OCR processing results",
+            "dependencies": [
+              "9.3"
+            ],
+            "details": "Build camera capture interface with nutrition label framing guides. Implement real-time OCR preview with detected text overlay. Create processing state indicators and progress feedback. Add image review functionality before OCR processing. Implement intuitive navigation flow from camera to results display.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Add Manual Correction Interface and Complete Workflow",
+            "description": "Implement manual correction capabilities and complete end-to-end workflow from capture to food creation",
+            "dependencies": [
+              "9.4"
+            ],
+            "details": "Create manual correction interface for editing OCR-extracted nutrition data. Implement form validation for nutritional values and serving sizes. Add workflow integration to create Food entries from corrected OCR data. Implement save/cancel functionality with proper data validation. Create seamless transition from OCR results to food database entry with user confirmation.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Implement Real-time Data Synchronization",
+        "description": "Setup Supabase real-time subscriptions for live data updates across devices and sessions",
+        "details": "Configure Supabase real-time subscriptions for foods and food_logs tables. Implement RealtimeManager class to handle subscription lifecycle. Add live updates to FoodListView when foods are added/modified. Update daily statistics in real-time when food logs are created/updated. Handle subscription connection states and reconnection logic. Implement proper subscription cleanup to prevent memory leaks. Add user feedback for real-time connection status.",
+        "testStrategy": "Test real-time updates across multiple app instances, verify subscription lifecycle management, validate connection handling and error recovery",
+        "priority": "low",
+        "dependencies": [
+          4
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Configure Supabase Real-time Subscriptions",
+            "description": "Setup real-time subscriptions for foods and food_logs tables with proper channel configuration",
+            "dependencies": [],
+            "details": "Configure Supabase real-time subscriptions for foods and food_logs tables. Setup subscription channels with appropriate filters and event types (INSERT, UPDATE, DELETE). Configure subscription options for optimal performance and implement proper error handling for subscription failures.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Create RealtimeManager Class",
+            "description": "Implement RealtimeManager class to handle subscription lifecycle management and state tracking",
+            "dependencies": [
+              "10.1"
+            ],
+            "details": "Create RealtimeManager singleton class to handle subscription lifecycle management. Implement methods for starting/stopping subscriptions, tracking connection states, and managing multiple subscription channels. Add proper initialization and cleanup methods to prevent memory leaks.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement Live UI Updates",
+            "description": "Add real-time updates to FoodListView and daily statistics when data changes occur",
+            "dependencies": [
+              "10.2"
+            ],
+            "details": "Integrate real-time updates into FoodListView to refresh when foods are added/modified. Update daily statistics in real-time when food logs are created/updated. Implement efficient UI update mechanisms using Combine publishers or similar reactive patterns to avoid unnecessary re-renders.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Handle Connection States and Cleanup",
+            "description": "Implement connection state handling, reconnection logic, and proper subscription cleanup",
+            "dependencies": [
+              "10.3"
+            ],
+            "details": "Handle subscription connection states and implement automatic reconnection logic for network interruptions. Add user feedback for real-time connection status with appropriate UI indicators. Implement proper subscription cleanup to prevent memory leaks when views are dismissed or app backgrounds.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "created": "2025-09-22T23:34:34.370Z",
+      "updated": "2025-09-22T23:34:34.370Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
