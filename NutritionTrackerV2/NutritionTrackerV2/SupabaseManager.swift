@@ -32,7 +32,7 @@ class SupabaseManager: ObservableObject {
     @Published var errorMessage: String?
     @Published var connectionStatus: ConnectionStatus = .disconnected
 
-    enum ConnectionStatus {
+    enum ConnectionStatus: Equatable {
         case connected
         case disconnected
         case connecting
