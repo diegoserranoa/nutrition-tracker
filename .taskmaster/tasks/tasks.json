@@ -85,7 +85,7 @@
             "description": "Integrate Supabase Swift SDK into the iOS project using Swift Package Manager and verify successful installation",
             "dependencies": [],
             "details": "Open Xcode project and navigate to Package Dependencies. Add Supabase Swift SDK from GitHub repository (https://github.com/supabase/supabase-swift). Verify the SDK is properly added to project targets and imports are working. Ensure all necessary Supabase modules are available for use in the project.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -614,7 +614,7 @@
     ],
     "metadata": {
       "created": "2025-09-22T23:34:34.370Z",
-      "updated": "2025-09-23T00:58:50.939Z",
+      "updated": "2025-09-23T01:29:05.366Z",
       "description": "Tasks for master context"
     }
   }
