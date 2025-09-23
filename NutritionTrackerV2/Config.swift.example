@@ -1,0 +1,24 @@
+//
+//  Config.swift.example
+//  NutritionTrackerV2
+//
+//  Supabase configuration for the iOS app
+//  Copy this file to Config.swift and fill in your actual values
+//
+
+import Foundation
+
+struct SupabaseConfig {
+    // Your Supabase project URL (found in Project Settings > API)
+    static let url = "https://your-project-ref.supabase.co"
+
+    // Your Supabase anon/public key (found in Project Settings > API)
+    static let anonKey = "your_anon_key_here"
+}
+
+// MARK: - Usage
+// Initialize Supabase client with these values:
+// let supabase = SupabaseClient(
+//     supabaseURL: URL(string: SupabaseConfig.url)!,
+//     supabaseKey: SupabaseConfig.anonKey
+// )
