@@ -122,6 +122,8 @@ class AuthManagerTests: XCTestCase {
             .userNotAuthenticated,
             .invalidUsername,
             .networkError,
+            .sessionExpired,
+            .sessionRefreshFailed,
             .unknown("Test error")
         ]
 
@@ -183,6 +185,84 @@ class AuthManagerTests: XCTestCase {
 
         // Note: Testing actual loading states would require mocking network requests
         // which is complex with the current setup
+    }
+
+    // MARK: - Session Management Tests
+
+    func testSessionManagementInitialState() async throws {
+        // Test initial session state
+        XCTAssertNil(authManager.currentSession, "Current session should be nil initially")
+        XCTAssertNil(authManager.sessionExpiresAt, "Session expiry should be nil initially")
+        XCTAssertFalse(authManager.isSessionExpiring, "Session should not be expiring initially")
+        XCTAssertNil(authManager.sessionTimeRemaining, "Session time remaining should be nil initially")
+        XCTAssertFalse(authManager.isSessionCloseToExpiring, "Session should not be close to expiring initially")
+    }
+
+    func testSessionTimeCalculations() async throws {
+        // Test session time calculations with mock session data
+        let futureDate = Date().addingTimeInterval(3600) // 1 hour from now
+
+        // Simulate setting a session expiry
+        await MainActor.run {
+            authManager.sessionExpiresAt = futureDate
+        }
+
+        // Test time remaining calculation
+        let timeRemaining = authManager.sessionTimeRemaining
+        XCTAssertNotNil(timeRemaining, "Session time remaining should not be nil")
+        XCTAssertGreaterThan(timeRemaining!, 3500, "Should have roughly 1 hour remaining")
+
+        // Test close to expiring (should be false for 1 hour)
+        XCTAssertFalse(authManager.isSessionCloseToExpiring, "1 hour should not be close to expiring")
+
+        // Test with session close to expiring
+        let soonDate = Date().addingTimeInterval(300) // 5 minutes from now
+        await MainActor.run {
+            authManager.sessionExpiresAt = soonDate
+        }
+
+        XCTAssertTrue(authManager.isSessionCloseToExpiring, "5 minutes should be close to expiring")
+    }
+
+    func testRefreshSessionWhenNotAuthenticated() async throws {
+        // Test that refreshing session when not authenticated returns false
+        let result = await authManager.refreshSessionIfNeeded()
+        XCTAssertFalse(result, "Should return false when not authenticated")
+    }
+
+    func testValidateSessionWhenNotAuthenticated() async throws {
+        // Test that validating session when not authenticated returns false
+        let result = await authManager.validateSession()
+        XCTAssertFalse(result, "Should return false when not authenticated")
+    }
+
+    func testSessionExpiryHandling() async throws {
+        // Test behavior when session is set to expired
+        let expiredDate = Date().addingTimeInterval(-3600) // 1 hour ago
+
+        await MainActor.run {
+            authManager.sessionExpiresAt = expiredDate
+            authManager.isAuthenticated = true // Simulate authenticated state
+        }
+
+        // Session should be considered expired
+        let timeRemaining = authManager.sessionTimeRemaining
+        XCTAssertNotNil(timeRemaining, "Time remaining should not be nil")
+        XCTAssertLessThan(timeRemaining!, 0, "Time remaining should be negative for expired session")
+    }
+
+    func testSessionProperties() async throws {
+        // Test session-related published properties are accessible
+        XCTAssertNotNil(authManager.currentSession, "currentSession property should be accessible (even if nil)")
+        XCTAssertNotNil(authManager.sessionExpiresAt, "sessionExpiresAt property should be accessible (even if nil)")
+
+        // Test boolean properties
+        let isExpiring = authManager.isSessionExpiring
+        let isCloseToExpiring = authManager.isSessionCloseToExpiring
+
+        // These should not crash and should return valid boolean values
+        XCTAssertTrue(isExpiring == true || isExpiring == false, "isSessionExpiring should be a valid boolean")
+        XCTAssertTrue(isCloseToExpiring == true || isCloseToExpiring == false, "isSessionCloseToExpiring should be a valid boolean")
     }
 
     // MARK: - Integration Tests

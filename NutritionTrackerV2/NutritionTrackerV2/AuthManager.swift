@@ -8,6 +8,7 @@
 import Foundation
 import Supabase
 import Combine
+import UIKit
 
 @MainActor
 class AuthManager: ObservableObject {
@@ -18,6 +19,13 @@ class AuthManager: ObservableObject {
     // MARK: - Properties
     private let supabaseManager = SupabaseManager.shared
     private var cancellables = Set<AnyCancellable>()
+    private var sessionRefreshTimer: Timer?
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+
+    // Session management
+    @Published var currentSession: Session?
+    @Published var sessionExpiresAt: Date?
+    @Published var isSessionExpiring = false
 
     // Published properties for UI binding
     @Published var isAuthenticated = false
@@ -61,6 +69,8 @@ class AuthManager: ObservableObject {
     // MARK: - Initialization
     private init() {
         setupAuthStateObserver()
+        setupSessionManagement()
+        setupAppLifecycleObservers()
         checkInitialAuthState()
     }
 
@@ -231,14 +241,67 @@ class AuthManager: ObservableObject {
         clearError()
 
         do {
-            _ = try await supabaseManager.auth.refreshSession()
+            let refreshedSession = try await supabaseManager.auth.refreshSession()
+            await updateSessionInfo(refreshedSession)
         } catch {
             let authError = mapSupabaseError(error)
             setError(authError.localizedDescription)
+            await handleSessionExpired()
             throw authError
         }
 
         setLoading(false)
+    }
+
+    /// Manually refresh session (public interface)
+    /// - Returns: True if refresh was successful
+    @discardableResult
+    func refreshSessionIfNeeded() async -> Bool {
+        guard isAuthenticated else { return false }
+
+        // Check if session needs refresh (refresh 5 minutes before expiry)
+        if let expiresAt = sessionExpiresAt, Date().addingTimeInterval(300) >= expiresAt {
+            do {
+                try await refreshSession()
+                return true
+            } catch {
+                print("Failed to refresh session: \(error)")
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Check session validity and refresh if necessary
+    func validateSession() async -> Bool {
+        guard isAuthenticated, let session = currentSession else {
+            return false
+        }
+
+        // Check if session is expired
+        if let expiresAt = sessionExpiresAt, Date() >= expiresAt {
+            do {
+                try await refreshSession()
+                return true
+            } catch {
+                await handleSessionExpired()
+                return false
+            }
+        }
+
+        return true
+    }
+
+    /// Get session time remaining in seconds
+    var sessionTimeRemaining: TimeInterval? {
+        guard let expiresAt = sessionExpiresAt else { return nil }
+        return expiresAt.timeIntervalSince(Date())
+    }
+
+    /// Check if session is close to expiring (within 10 minutes)
+    var isSessionCloseToExpiring: Bool {
+        guard let remaining = sessionTimeRemaining else { return false }
+        return remaining <= 600 // 10 minutes
     }
 
     // MARK: - User Profile Methods
@@ -310,6 +373,11 @@ class AuthManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isAuth in
                 self?.isAuthenticated = isAuth
+                if !isAuth {
+                    Task { @MainActor in
+                        self?.clearSessionInfo()
+                    }
+                }
                 self?.updateAuthenticationState()
             }
             .store(in: &cancellables)
@@ -318,6 +386,11 @@ class AuthManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] user in
                 self?.currentUser = user
+                if user != nil {
+                    Task {
+                        await self?.loadCurrentSession()
+                    }
+                }
                 self?.updateAuthenticationState()
             }
             .store(in: &cancellables)
@@ -376,6 +449,145 @@ class AuthManager: ObservableObject {
                password.range(of: ".*[0-9]+.*", options: .regularExpression) != nil
     }
 
+    // MARK: - Session Management Methods
+
+    private func setupSessionManagement() {
+        // Start session monitoring
+        startSessionMonitoring()
+    }
+
+    private func setupAppLifecycleObservers() {
+        // Handle app lifecycle events for session management
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleAppDidEnterBackground()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleAppWillEnterForeground()
+        }
+    }
+
+    private func startSessionMonitoring() {
+        sessionRefreshTimer?.invalidate()
+        sessionRefreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                await self?.checkAndRefreshSession()
+            }
+        }
+    }
+
+    private func stopSessionMonitoring() {
+        sessionRefreshTimer?.invalidate()
+        sessionRefreshTimer = nil
+    }
+
+    private func loadCurrentSession() async {
+        do {
+            let session = try await supabaseManager.auth.session
+            await updateSessionInfo(session)
+        } catch {
+            print("Failed to load current session: \(error)")
+        }
+    }
+
+    private func updateSessionInfo(_ session: Session?) async {
+        await MainActor.run {
+            self.currentSession = session
+            if let session = session {
+                self.sessionExpiresAt = Date(timeIntervalSince1970: TimeInterval(session.expiresAt))
+                self.isSessionExpiring = isSessionCloseToExpiring
+            } else {
+                self.sessionExpiresAt = nil
+                self.isSessionExpiring = false
+            }
+        }
+    }
+
+    private func clearSessionInfo() {
+        currentSession = nil
+        sessionExpiresAt = nil
+        isSessionExpiring = false
+        stopSessionMonitoring()
+    }
+
+    private func checkAndRefreshSession() async {
+        guard isAuthenticated else { return }
+
+        // Check if session is expiring in the next 5 minutes
+        if let remaining = sessionTimeRemaining, remaining <= 300 {
+            isSessionExpiring = true
+
+            // Attempt automatic refresh
+            await refreshSessionIfNeeded()
+        } else {
+            isSessionExpiring = false
+        }
+
+        // Validate session health
+        let isValid = await validateSession()
+        if !isValid {
+            print("Session validation failed")
+        }
+    }
+
+    private func handleSessionExpired() async {
+        await MainActor.run {
+            clearSessionInfo()
+            authenticationState = .unauthenticated
+            isAuthenticated = false
+            currentUser = nil
+        }
+    }
+
+    private func handleAppDidEnterBackground() {
+        // Store background task to continue session refresh in background
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "SessionRefresh") { [weak self] in
+            self?.endBackgroundTask()
+        }
+
+        // Proactively refresh session before going to background if needed
+        if isAuthenticated && isSessionCloseToExpiring {
+            Task {
+                await refreshSessionIfNeeded()
+                endBackgroundTask()
+            }
+        } else {
+            endBackgroundTask()
+        }
+    }
+
+    private func handleAppWillEnterForeground() {
+        endBackgroundTask()
+
+        // Validate session when returning to foreground
+        if isAuthenticated {
+            Task {
+                let isValid = await validateSession()
+                if !isValid {
+                    print("Session expired while app was in background")
+                }
+
+                // Restart monitoring
+                startSessionMonitoring()
+            }
+        }
+    }
+
+    private func endBackgroundTask() {
+        if backgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(backgroundTask)
+            backgroundTask = .invalid
+        }
+    }
+
     // MARK: - Error Mapping
 
     private func mapSupabaseError(_ error: Error) -> AuthManagerError {
@@ -393,6 +605,10 @@ class AuthManager: ObservableObject {
             return .networkError
         } else if errorDescription.contains("invalid email") {
             return .invalidEmail
+        } else if errorDescription.contains("session") && errorDescription.contains("expired") {
+            return .sessionExpired
+        } else if errorDescription.contains("refresh") && errorDescription.contains("token") {
+            return .sessionRefreshFailed
         } else {
             return .unknown(error.localizedDescription)
         }
@@ -410,6 +626,8 @@ enum AuthManagerError: Error, LocalizedError {
     case userNotAuthenticated
     case invalidUsername
     case networkError
+    case sessionExpired
+    case sessionRefreshFailed
     case unknown(String)
 
     var errorDescription: String? {
@@ -430,6 +648,10 @@ enum AuthManagerError: Error, LocalizedError {
             return "Please enter a valid username."
         case .networkError:
             return "Network error. Please check your connection and try again."
+        case .sessionExpired:
+            return "Your session has expired. Please sign in again."
+        case .sessionRefreshFailed:
+            return "Failed to refresh session. Please sign in again."
         case .unknown(let message):
             return message
         }

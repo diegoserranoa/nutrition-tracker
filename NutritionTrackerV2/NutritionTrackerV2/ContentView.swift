@@ -10,6 +10,27 @@ import CoreData
 
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @StateObject private var authManager = AuthManager.shared
+
+    var body: some View {
+        Group {
+            if authManager.isUserAuthenticated {
+                // User is authenticated - show main app with tabs
+                AuthenticatedContentView(viewContext: viewContext)
+            } else {
+                // User is not authenticated - show authentication flow
+                AuthenticationView()
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: authManager.isUserAuthenticated)
+    }
+}
+
+// MARK: - Authenticated Content
+
+struct AuthenticatedContentView: View {
+    let viewContext: NSManagedObjectContext
+    @StateObject private var authManager = AuthManager.shared
 
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
@@ -18,6 +39,85 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
+            // Home/Dashboard Tab
+            NavigationView {
+                VStack(spacing: 24) {
+                    // Welcome header
+                    VStack(spacing: 16) {
+                        Image(systemName: "leaf.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.green)
+
+                        Text("Welcome back!")
+                            .font(.title)
+                            .fontWeight(.bold)
+
+                        if let user = authManager.currentUser, let email = user.email {
+                            Text(email)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    // Quick actions
+                    LazyVGrid(columns: [
+                        GridItem(.flexible()),
+                        GridItem(.flexible())
+                    ], spacing: 16) {
+                        QuickActionCard(
+                            title: "Log Food",
+                            icon: "plus.circle.fill",
+                            color: .green
+                        ) {
+                            // TODO: Navigate to food logging
+                        }
+
+                        QuickActionCard(
+                            title: "View Progress",
+                            icon: "chart.line.uptrend.xyaxis",
+                            color: .blue
+                        ) {
+                            // TODO: Navigate to progress view
+                        }
+
+                        QuickActionCard(
+                            title: "Scan Barcode",
+                            icon: "barcode.viewfinder",
+                            color: .orange
+                        ) {
+                            // TODO: Navigate to barcode scanner
+                        }
+
+                        QuickActionCard(
+                            title: "Settings",
+                            icon: "gear",
+                            color: .purple
+                        ) {
+                            // TODO: Navigate to settings
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding()
+                .navigationTitle("Dashboard")
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Sign Out") {
+                            Task {
+                                try? await authManager.signOut()
+                            }
+                        }
+                        .foregroundColor(.red)
+                    }
+                }
+            }
+            .tabItem {
+                Image(systemName: "house.fill")
+                Text("Home")
+            }
+
+            // Core Data Items Tab (legacy)
             NavigationView {
                 List {
                     ForEach(items) { item in
@@ -46,6 +146,7 @@ struct ContentView: View {
                 Text("Items")
             }
 
+            // Testing tabs
             SupabaseTestView()
                 .tabItem {
                     Image(systemName: "network")
@@ -68,8 +169,6 @@ struct ContentView: View {
             do {
                 try viewContext.save()
             } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
                 let nsError = error as NSError
                 fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
             }
@@ -83,12 +182,39 @@ struct ContentView: View {
             do {
                 try viewContext.save()
             } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
                 let nsError = error as NSError
                 fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
             }
         }
+    }
+}
+
+// MARK: - Supporting Views
+
+struct QuickActionCard: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 32))
+                    .foregroundColor(color)
+
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 120)
+            .background(Color(.systemGray6))
+            .cornerRadius(16)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
