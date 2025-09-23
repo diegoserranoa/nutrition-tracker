@@ -13,6 +13,8 @@ struct ForgotPasswordView: View {
     @State private var email = ""
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @State private var alertTitle = "Password Reset"
+    @State private var isSuccess = false
     @FocusState private var isEmailFocused: Bool
 
     var body: some View {
@@ -124,11 +126,13 @@ struct ForgotPasswordView: View {
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
-        .alert("Password Reset", isPresented: $showAlert) {
-            Button("OK") {
-                if alertMessage.contains("sent") {
+        .alert(alertTitle, isPresented: $showAlert) {
+            if isSuccess {
+                Button("Continue") {
                     dismiss()
                 }
+            } else {
+                Button("OK") { }
             }
         } message: {
             Text(alertMessage)
@@ -156,11 +160,43 @@ struct ForgotPasswordView: View {
 
         do {
             try await authManager.resetPassword(email: email)
-            alertMessage = "Password reset link has been sent to your email address."
-            showAlert = true
+            await MainActor.run {
+                alertTitle = "Reset Link Sent"
+                alertMessage = "Password reset link has been sent to your email address. Please check your inbox and follow the instructions."
+                isSuccess = true
+                showAlert = true
+            }
         } catch {
-            alertMessage = error.localizedDescription
-            showAlert = true
+            await MainActor.run {
+                alertTitle = "Reset Failed"
+                alertMessage = getErrorMessage(from: error)
+                isSuccess = false
+                showAlert = true
+            }
+        }
+    }
+
+    private func getErrorMessage(from error: Error) -> String {
+        if let authError = error as? AuthManagerError {
+            switch authError {
+            case .invalidEmail:
+                return "Please enter a valid email address."
+            case .networkError:
+                return "Network connection error. Please check your internet connection and try again."
+            default:
+                return authError.localizedDescription
+            }
+        } else {
+            let errorDescription = error.localizedDescription.lowercased()
+            if errorDescription.contains("email") && errorDescription.contains("not found") {
+                return "No account found with this email address. Please check the email or create a new account."
+            } else if errorDescription.contains("network") || errorDescription.contains("connection") {
+                return "Network connection error. Please check your internet connection and try again."
+            } else if errorDescription.contains("rate limit") || errorDescription.contains("too many") {
+                return "Too many reset attempts. Please wait a few minutes before trying again."
+            } else {
+                return "Password reset failed: \(error.localizedDescription)"
+            }
         }
     }
 }

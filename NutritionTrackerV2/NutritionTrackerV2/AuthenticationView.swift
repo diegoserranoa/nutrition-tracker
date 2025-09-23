@@ -16,6 +16,7 @@ struct AuthenticationView: View {
     @State private var showForgotPassword = false
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @State private var alertTitle = "Authentication"
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
@@ -179,7 +180,7 @@ struct AuthenticationView: View {
         .sheet(isPresented: $showForgotPassword) {
             ForgotPasswordView()
         }
-        .alert("Authentication", isPresented: $showAlert) {
+        .alert(alertTitle, isPresented: $showAlert) {
             Button("OK") { }
         } message: {
             Text(alertMessage)
@@ -204,8 +205,44 @@ struct AuthenticationView: View {
             try await authManager.signIn(email: email, password: password)
             // Navigation to main app will be handled by the parent view based on auth state
         } catch {
-            alertMessage = error.localizedDescription
-            showAlert = true
+            await MainActor.run {
+                alertTitle = "Sign In Failed"
+                alertMessage = getErrorMessage(from: error)
+                showAlert = true
+            }
+        }
+    }
+
+    private func getErrorMessage(from error: Error) -> String {
+        if let authError = error as? AuthManagerError {
+            switch authError {
+            case .invalidCredentials:
+                return "Invalid email or password. Please check your credentials and try again."
+            case .invalidEmail:
+                return "Please enter a valid email address."
+            case .emptyPassword:
+                return "Please enter your password."
+            case .networkError:
+                return "Network connection error. Please check your internet connection and try again."
+            case .sessionExpired:
+                return "Your session has expired. Please sign in again."
+            case .userNotAuthenticated:
+                return "Authentication failed. Please try again."
+            default:
+                return authError.localizedDescription
+            }
+        } else {
+            // Handle other types of errors
+            let errorDescription = error.localizedDescription.lowercased()
+            if errorDescription.contains("invalid") && (errorDescription.contains("credential") || errorDescription.contains("password") || errorDescription.contains("email")) {
+                return "Invalid email or password. Please check your credentials and try again."
+            } else if errorDescription.contains("network") || errorDescription.contains("connection") {
+                return "Network connection error. Please check your internet connection and try again."
+            } else if errorDescription.contains("not confirmed") || errorDescription.contains("email not verified") {
+                return "Please check your email and click the verification link before signing in."
+            } else {
+                return "Sign in failed: \(error.localizedDescription)"
+            }
         }
     }
 

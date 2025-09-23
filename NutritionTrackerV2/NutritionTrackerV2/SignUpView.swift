@@ -18,7 +18,18 @@ struct SignUpView: View {
     @State private var agreeToTerms = false
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @State private var alertTitle = "Sign Up"
+    @State private var isSuccess = false
+    @State private var signUpStep: SignUpStep = .initial
     @FocusState private var focusedField: Field?
+
+    private enum SignUpStep {
+        case initial
+        case creatingAccount
+        case creatingProfile
+        case completed
+        case failed
+    }
 
     private enum Field: Hashable {
         case email, password, confirmPassword, username
@@ -255,22 +266,22 @@ struct SignUpView: View {
                                 }
                             }) {
                                 HStack {
-                                    if authManager.isLoading {
+                                    if authManager.isLoading || signUpStep != .initial {
                                         ProgressView()
                                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                             .scaleEffect(0.8)
                                     }
 
-                                    Text(authManager.isLoading ? "Creating Account..." : "Create Account")
+                                    Text(buttonText)
                                         .fontWeight(.semibold)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(isFormValid ? Color.green : Color.gray)
+                                .background(buttonBackgroundColor)
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
                             }
-                            .disabled(!isFormValid || authManager.isLoading)
+                            .disabled(!isFormValid || authManager.isLoading || signUpStep == .creatingAccount || signUpStep == .creatingProfile)
                         }
                         .padding(.horizontal, 32)
 
@@ -289,10 +300,20 @@ struct SignUpView: View {
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
-        .alert("Sign Up", isPresented: $showAlert) {
-            Button("OK") {
-                if alertMessage.contains("successful") {
+        .alert(alertTitle, isPresented: $showAlert) {
+            if isSuccess {
+                Button("Continue") {
                     dismiss()
+                }
+            } else {
+                Button("OK") {
+                    // Reset signup step on error acknowledgment
+                    signUpStep = .initial
+                }
+                if signUpStep == .failed {
+                    Button("Try Again") {
+                        signUpStep = .initial
+                    }
                 }
             }
         } message: {
@@ -329,22 +350,132 @@ struct SignUpView: View {
         isValidEmail && isValidUsername && isValidPassword && passwordsMatch && agreeToTerms
     }
 
+    private var buttonText: String {
+        switch signUpStep {
+        case .initial:
+            return "Create Account"
+        case .creatingAccount:
+            return "Creating Account..."
+        case .creatingProfile:
+            return "Setting Up Profile..."
+        case .completed:
+            return "Account Created!"
+        case .failed:
+            return "Try Again"
+        }
+    }
+
+    private var buttonBackgroundColor: Color {
+        switch signUpStep {
+        case .initial, .failed:
+            return isFormValid ? Color.green : Color.gray
+        case .creatingAccount, .creatingProfile:
+            return Color.blue
+        case .completed:
+            return Color.green
+        }
+    }
+
     // MARK: - Actions
 
     private func signUp() async {
         focusedField = nil
 
+        await MainActor.run {
+            signUpStep = .creatingAccount
+        }
+
         do {
+            // Step 1: Create the authentication account
             try await authManager.signUp(email: email, password: password)
 
-            // Create user profile
-            try await authManager.createUserProfile(username: username)
+            await MainActor.run {
+                signUpStep = .creatingProfile
+            }
 
-            alertMessage = "Account created successfully! Please check your email for verification."
-            showAlert = true
+            // Small delay to show the profile creation step
+            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
+            // Step 2: Create user profile - with retry logic
+            var profileCreated = false
+            var profileAttempts = 0
+            let maxProfileAttempts = 3
+
+            while !profileCreated && profileAttempts < maxProfileAttempts {
+                do {
+                    try await authManager.createUserProfile(username: username)
+                    profileCreated = true
+                } catch {
+                    profileAttempts += 1
+                    if profileAttempts < maxProfileAttempts {
+                        // Wait a bit before retrying
+                        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                    } else {
+                        // If profile creation fails after retries, still proceed but warn user
+                        await MainActor.run {
+                            signUpStep = .completed
+                            alertTitle = "Account Created"
+                            alertMessage = "Account created successfully! However, there was an issue setting up your profile. You can complete this later in settings.\n\nPlease check your email for verification."
+                            isSuccess = true
+                            showAlert = true
+                        }
+                        return
+                    }
+                }
+            }
+
+            // Success - both account and profile created
+            await MainActor.run {
+                signUpStep = .completed
+                alertTitle = "Success!"
+                alertMessage = "Account and profile created successfully! Please check your email for verification."
+                isSuccess = true
+                showAlert = true
+            }
+
         } catch {
-            alertMessage = error.localizedDescription
-            showAlert = true
+            await MainActor.run {
+                signUpStep = .failed
+                alertTitle = "Sign Up Failed"
+                alertMessage = getErrorMessage(from: error)
+                isSuccess = false
+                showAlert = true
+            }
+        }
+    }
+
+    private func getErrorMessage(from error: Error) -> String {
+        if let authError = error as? AuthManagerError {
+            switch authError {
+            case .emailAlreadyExists:
+                return "An account with this email address already exists. Please try signing in instead."
+            case .weakPassword:
+                return "Password does not meet security requirements. Please choose a stronger password."
+            case .invalidEmail:
+                return "Please enter a valid email address."
+            case .networkError:
+                return "Network connection error. Please check your internet connection and try again."
+            case .invalidCredentials:
+                return "There was an issue with your credentials. Please check your information and try again."
+            case .userNotAuthenticated:
+                return "Authentication failed. Please try again."
+            case .invalidUsername:
+                return "Username is invalid. Please choose a different username."
+            default:
+                return authError.localizedDescription
+            }
+        } else {
+            // Handle other types of errors
+            let errorDescription = error.localizedDescription.lowercased()
+            if errorDescription.contains("email") && errorDescription.contains("already") {
+                return "An account with this email address already exists. Please try signing in instead."
+            } else if errorDescription.contains("network") || errorDescription.contains("connection") {
+                return "Network connection error. Please check your internet connection and try again."
+            } else if errorDescription.contains("password") {
+                return "Password does not meet requirements. Please choose a stronger password."
+            } else {
+                return "Account creation failed: \(error.localizedDescription)"
+            }
         }
     }
 }
