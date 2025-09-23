@@ -24,4 +24,5 @@ node_modules/
 # OS specific
 .DS_Store
 
+./NutritionTrackerV2/NutritionTrackerV2.xcodeproj/project.xcworkspace/xcuserdata
 ./NutritionTrackerV2/NutritionTrackerV2.xcodeproj/project.xcworkspace/xcuserdata/diegoserranoa.xcuserdatad/UserInterfaceState.xcuserstate
