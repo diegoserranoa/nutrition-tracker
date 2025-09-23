@@ -421,5 +421,5 @@ _This guide ensures Claude Code has immediate access to Task Master's essential 
 After finishing responding to my request or running a command, run this command to notify me by sound:
 
 ```bash
-say "Done"
+afplay /System/Library/Sounds/Hero.aiff
 ```
