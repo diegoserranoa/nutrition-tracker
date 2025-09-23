@@ -51,6 +51,12 @@ struct ContentView: View {
                     Image(systemName: "network")
                     Text("Supabase Test")
                 }
+
+            AuthTestView()
+                .tabItem {
+                    Image(systemName: "person.circle")
+                    Text("Auth Test")
+                }
         }
     }
 
