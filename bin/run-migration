@@ -1,0 +1,429 @@
+#!/bin/bash
+
+# ========================================
+# Supabase Migration Runner
+# ========================================
+# This script runs database migrations in order for NutritionTrackerV2
+# Usage: ./bin/run-migration [options]
+# Example: ./bin/run-migration --all
+
+set -e  # Exit on any error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Script configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+DATABASE_DIR="$PROJECT_ROOT/database"
+ENV_FILE="$PROJECT_ROOT/.env"
+
+# Migration files in order
+MIGRATION_FILES=(
+    "01-profiles-table.sql"
+    "02-foods-table.sql"
+    "03-food-logs-table.sql"
+    "04-indexes-constraints.sql"
+)
+
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 [options]"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help        Show this help message"
+    echo "  -v, --verbose     Verbose output"
+    echo "  --dry-run         Show what would be executed without running"
+    echo "  --all             Run all migrations"
+    echo "  --from <number>   Start from specific migration (e.g., --from 2)"
+    echo "  --to <number>     Run up to specific migration (e.g., --to 3)"
+    echo "  --single <number> Run only specific migration (e.g., --single 1)"
+    echo "  --list            List available migrations"
+    echo "  --status          Show migration status"
+    echo "  --confirm         Require confirmation before executing"
+    echo ""
+    echo "Examples:"
+    echo "  $0 --all                    # Run all migrations"
+    echo "  $0 --from 2 --to 3         # Run migrations 2 and 3"
+    echo "  $0 --single 1              # Run only migration 1"
+    echo "  $0 --list                  # List available migrations"
+    echo "  $0 --status                # Check migration status"
+    echo ""
+    echo "Migration Files:"
+    for i in "${!MIGRATION_FILES[@]}"; do
+        echo "  $((i+1)). ${MIGRATION_FILES[$i]}"
+    done
+}
+
+# Function to load environment variables
+load_env() {
+    if [[ -f "$ENV_FILE" ]]; then
+        print_status "Loading environment from $ENV_FILE"
+        source "$ENV_FILE"
+    else
+        print_warning ".env file not found at $ENV_FILE"
+        print_warning "Make sure to set DATABASE_URL environment variable"
+    fi
+}
+
+# Function to check prerequisites
+check_prerequisites() {
+    if ! command -v psql &> /dev/null; then
+        print_error "psql command not found. Please install PostgreSQL client."
+        echo "macOS: brew install postgresql"
+        echo "Ubuntu: sudo apt-get install postgresql-client"
+        exit 1
+    fi
+
+    if [[ -z "$DATABASE_URL" ]]; then
+        print_error "DATABASE_URL environment variable is not set"
+        print_error "Please set it in your .env file or export it directly"
+        exit 1
+    fi
+
+    if [[ ! -d "$DATABASE_DIR" ]]; then
+        print_error "Database directory not found: $DATABASE_DIR"
+        exit 1
+    fi
+}
+
+# Function to create migration tracking table
+create_migration_table() {
+    local sql="
+    CREATE TABLE IF NOT EXISTS _migrations (
+        id SERIAL PRIMARY KEY,
+        filename TEXT UNIQUE NOT NULL,
+        executed_at TIMESTAMPTZ DEFAULT NOW(),
+        checksum TEXT
+    );
+    "
+
+    if psql "$DATABASE_URL" -q -c "$sql"; then
+        print_status "Migration tracking table ready"
+    else
+        print_error "Failed to create migration tracking table"
+        exit 1
+    fi
+}
+
+# Function to check if migration was already executed
+is_migration_executed() {
+    local filename="$1"
+    local result=$(psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FROM _migrations WHERE filename = '$filename';")
+    [[ "$result" -gt 0 ]]
+}
+
+# Function to record migration execution
+record_migration() {
+    local filename="$1"
+    local checksum="$2"
+    local sql="INSERT INTO _migrations (filename, checksum) VALUES ('$filename', '$checksum');"
+
+    if psql "$DATABASE_URL" -q -c "$sql"; then
+        print_success "Recorded migration: $filename"
+    else
+        print_error "Failed to record migration: $filename"
+        exit 1
+    fi
+}
+
+# Function to get file checksum
+get_checksum() {
+    local file="$1"
+    if command -v shasum &> /dev/null; then
+        shasum -a 256 "$file" | cut -d' ' -f1
+    elif command -v sha256sum &> /dev/null; then
+        sha256sum "$file" | cut -d' ' -f1
+    else
+        # Fallback to file size and modification time
+        stat -f "%z-%m" "$file" 2>/dev/null || stat -c "%s-%Y" "$file"
+    fi
+}
+
+# Function to list available migrations
+list_migrations() {
+    echo ""
+    echo "Available Migrations:"
+    echo "===================="
+
+    for i in "${!MIGRATION_FILES[@]}"; do
+        local num=$((i+1))
+        local file="${MIGRATION_FILES[$i]}"
+        local filepath="$DATABASE_DIR/$file"
+        local status="❓ Unknown"
+
+        if [[ -f "$filepath" ]]; then
+            if is_migration_executed "$file" 2>/dev/null; then
+                status="✅ Executed"
+            else
+                status="⏳ Pending"
+            fi
+        else
+            status="❌ Missing"
+        fi
+
+        printf "%2d. %-30s %s\n" "$num" "$file" "$status"
+    done
+    echo ""
+}
+
+# Function to show migration status
+show_status() {
+    create_migration_table
+
+    echo ""
+    echo "Migration Status:"
+    echo "================"
+
+    # Show executed migrations
+    echo ""
+    echo "Executed Migrations:"
+    psql "$DATABASE_URL" -c "SELECT filename, executed_at FROM _migrations ORDER BY executed_at;" 2>/dev/null || echo "No migrations executed yet"
+
+    echo ""
+    list_migrations
+}
+
+# Function to execute a single migration
+execute_migration() {
+    local file="$1"
+    local verbose="$2"
+    local dry_run="$3"
+    local filepath="$DATABASE_DIR/$file"
+
+    if [[ ! -f "$filepath" ]]; then
+        print_error "Migration file not found: $filepath"
+        return 1
+    fi
+
+    if is_migration_executed "$file"; then
+        print_warning "Migration already executed: $file"
+        return 0
+    fi
+
+    print_status "Executing migration: $file"
+
+    if [[ "$dry_run" == "true" ]]; then
+        print_warning "DRY RUN MODE - Would execute: $file"
+        return 0
+    fi
+
+    local checksum=$(get_checksum "$filepath")
+    local psql_args=()
+    psql_args+=("-f" "$filepath")
+
+    if [[ "$verbose" == "true" ]]; then
+        psql_args+=("-a" "-e")
+    else
+        psql_args+=("-q")
+    fi
+
+    # Execute the migration
+    if psql "$DATABASE_URL" "${psql_args[@]}"; then
+        record_migration "$file" "$checksum"
+        print_success "Migration completed: $file"
+        return 0
+    else
+        print_error "Migration failed: $file"
+        return 1
+    fi
+}
+
+# Function to confirm execution
+confirm_execution() {
+    local files=("$@")
+
+    echo ""
+    print_warning "You are about to execute the following migrations:"
+    for file in "${files[@]}"; do
+        echo "  - $file"
+    done
+    print_warning "Against database: ${DATABASE_URL%@*}@[HIDDEN]"
+    echo ""
+    read -p "Are you sure you want to continue? (y/N): " -n 1 -r
+    echo ""
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_status "Execution cancelled by user"
+        exit 0
+    fi
+}
+
+# Main function
+main() {
+    local verbose="false"
+    local dry_run="false"
+    local confirm="false"
+    local run_all="false"
+    local list_only="false"
+    local status_only="false"
+    local from_migration=""
+    local to_migration=""
+    local single_migration=""
+
+    # Parse command line arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
+            -v|--verbose)
+                verbose="true"
+                shift
+                ;;
+            --dry-run)
+                dry_run="true"
+                shift
+                ;;
+            --confirm)
+                confirm="true"
+                shift
+                ;;
+            --all)
+                run_all="true"
+                shift
+                ;;
+            --from)
+                from_migration="$2"
+                shift 2
+                ;;
+            --to)
+                to_migration="$2"
+                shift 2
+                ;;
+            --single)
+                single_migration="$2"
+                shift 2
+                ;;
+            --list)
+                list_only="true"
+                shift
+                ;;
+            --status)
+                status_only="true"
+                shift
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_usage
+                exit 1
+                ;;
+            *)
+                print_error "Unexpected argument: $1"
+                show_usage
+                exit 1
+                ;;
+        esac
+    done
+
+    print_status "NutritionTrackerV2 Migration Runner"
+    print_status "Project Root: $PROJECT_ROOT"
+
+    # Load environment and check prerequisites
+    load_env
+    check_prerequisites
+
+    # Handle list and status commands
+    if [[ "$list_only" == "true" ]]; then
+        list_migrations
+        exit 0
+    fi
+
+    if [[ "$status_only" == "true" ]]; then
+        show_status
+        exit 0
+    fi
+
+    # Create migration tracking table
+    create_migration_table
+
+    # Determine which migrations to run
+    local migrations_to_run=()
+
+    if [[ "$single_migration" != "" ]]; then
+        local index=$((single_migration - 1))
+        if [[ $index -ge 0 && $index -lt ${#MIGRATION_FILES[@]} ]]; then
+            migrations_to_run=("${MIGRATION_FILES[$index]}")
+        else
+            print_error "Invalid migration number: $single_migration"
+            exit 1
+        fi
+    elif [[ "$run_all" == "true" ]]; then
+        migrations_to_run=("${MIGRATION_FILES[@]}")
+    elif [[ "$from_migration" != "" || "$to_migration" != "" ]]; then
+        local start=${from_migration:-1}
+        local end=${to_migration:-${#MIGRATION_FILES[@]}}
+        local start_index=$((start - 1))
+        local end_index=$((end - 1))
+
+        if [[ $start_index -lt 0 || $end_index -ge ${#MIGRATION_FILES[@]} || $start_index -gt $end_index ]]; then
+            print_error "Invalid migration range: $start to $end"
+            exit 1
+        fi
+
+        for ((i=start_index; i<=end_index; i++)); do
+            migrations_to_run+=("${MIGRATION_FILES[$i]}")
+        done
+    else
+        print_error "No migration option specified"
+        show_usage
+        exit 1
+    fi
+
+    # Confirm execution if requested
+    if [[ "$confirm" == "true" ]]; then
+        confirm_execution "${migrations_to_run[@]}"
+    fi
+
+    # Execute migrations
+    local failed_count=0
+    local success_count=0
+
+    for migration in "${migrations_to_run[@]}"; do
+        if execute_migration "$migration" "$verbose" "$dry_run"; then
+            ((success_count++))
+        else
+            ((failed_count++))
+            if [[ "$dry_run" != "true" ]]; then
+                print_error "Stopping migration execution due to failure"
+                break
+            fi
+        fi
+    done
+
+    # Summary
+    echo ""
+    print_status "Migration Summary:"
+    print_success "Successful: $success_count"
+    if [[ $failed_count -gt 0 ]]; then
+        print_error "Failed: $failed_count"
+        exit 1
+    else
+        print_success "All migrations completed successfully"
+    fi
+}
+
+# Run main function with all arguments
+main "$@"
