@@ -41,6 +41,7 @@ class FoodService: ObservableObject, FoodServiceProtocol {
     // MARK: - Properties
 
     private let supabaseManager: SupabaseManager
+    private let cacheService: CacheService
     private let logger = Logger(subsystem: "com.nutritiontracker.foodservice", category: "FoodService")
     private let tableName = "foods"
 
@@ -50,8 +51,9 @@ class FoodService: ObservableObject, FoodServiceProtocol {
 
     // MARK: - Initialization
 
-    init(supabaseManager: SupabaseManager? = nil) {
+    init(supabaseManager: SupabaseManager? = nil, cacheService: CacheService? = nil) {
         self.supabaseManager = supabaseManager ?? SupabaseManager.shared
+        self.cacheService = cacheService ?? CacheService.shared
     }
 
     // MARK: - CRUD Operations
@@ -88,6 +90,10 @@ class FoodService: ObservableObject, FoodServiceProtocol {
             }
 
             logger.info("Successfully created food with ID: \(createdFood.id)")
+
+            // Cache the newly created food
+            cacheService.cacheFood(createdFood)
+
             return createdFood
 
         } catch let error as DataServiceError {
@@ -133,6 +139,10 @@ class FoodService: ObservableObject, FoodServiceProtocol {
             }
 
             logger.info("Successfully updated food with ID: \(updatedFood.id)")
+
+            // Update cache with the modified food
+            cacheService.cacheFood(updatedFood)
+
             return updatedFood
 
         } catch let error as DataServiceError {
@@ -161,6 +171,9 @@ class FoodService: ObservableObject, FoodServiceProtocol {
 
             logger.info("Successfully deleted food with ID: \(id)")
 
+            // Invalidate cache for the deleted food
+            cacheService.invalidateFoodData(foodId: id)
+
         } catch let error as DataServiceError {
             currentError = error
             throw error
@@ -173,6 +186,12 @@ class FoodService: ObservableObject, FoodServiceProtocol {
 
     func getFoodById(_ id: UUID) async throws -> Food? {
         logger.info("Fetching food by ID: \(id)")
+
+        // Check cache first
+        if let cachedFood = cacheService.getCachedFood(id: id) {
+            logger.debug("Retrieved food from cache: \(id)")
+            return cachedFood
+        }
 
         isLoading = true
         currentError = nil
@@ -188,6 +207,12 @@ class FoodService: ObservableObject, FoodServiceProtocol {
 
             let result = response.first
             logger.info("Successfully fetched food: \(result != nil ? "found" : "not found")")
+
+            // Cache the result if found
+            if let food = result {
+                cacheService.cacheFood(food)
+            }
+
             return result
 
         } catch let error as DataServiceError {
@@ -202,6 +227,17 @@ class FoodService: ObservableObject, FoodServiceProtocol {
 
     func searchFoods(parameters: FoodSearchParameters) async throws -> [Food] {
         logger.info("Searching foods with parameters")
+
+        // Check cache for search results if it's a simple text search with default pagination
+        if let searchQuery = parameters.query,
+           !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           parameters.offset == 0,
+           parameters.limit == 50 {
+            if let cachedResults = cacheService.getCachedSearchResults(query: searchQuery) {
+                logger.debug("Retrieved search results from cache for query: \(searchQuery)")
+                return cachedResults
+            }
+        }
 
         isLoading = true
         currentError = nil
@@ -221,6 +257,20 @@ class FoodService: ObservableObject, FoodServiceProtocol {
             let response: [Food] = try await finalQuery.execute().value
 
             logger.info("Successfully found \(response.count) foods")
+
+            // Cache search results if it's a simple text search with default pagination
+            if let searchQuery = parameters.query,
+               !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               parameters.offset == 0,
+               parameters.limit == 50 {
+                cacheService.cacheSearchResults(query: searchQuery, results: response, ttl: 300) // 5 minutes TTL
+            }
+
+            // Also cache individual food items
+            for food in response {
+                cacheService.cacheFood(food, ttl: 600) // 10 minutes TTL for individual foods
+            }
+
             return response
 
         } catch let error as DataServiceError {
@@ -287,5 +337,45 @@ class FoodService: ObservableObject, FoodServiceProtocol {
             "updated_at": AnyJSON.string(formatter.string(from: now)),
             "created_by": food.createdBy.map { AnyJSON.string($0.uuidString) } ?? AnyJSON.null
         ]
+    }
+
+    // MARK: - Preloading & Cache Management
+
+    /// Preload popular foods into cache
+    func preloadPopularFoods() async {
+        logger.info("Preloading popular foods")
+
+        let popularFoodIds = cacheService.getPopularFoodIds(limit: 20)
+        let foodsToPreload = cacheService.getFoodsToPreload()
+
+        let allFoodsToLoad = Set(popularFoodIds).union(foodsToPreload)
+
+        for foodId in allFoodsToLoad {
+            do {
+                // This will cache the food if not already cached
+                _ = try await getFoodById(foodId)
+            } catch {
+                logger.warning("Failed to preload food \(foodId): \(error.localizedDescription)")
+            }
+        }
+
+        logger.info("Completed preloading \(allFoodsToLoad.count) popular foods")
+    }
+
+    /// Get cache statistics for monitoring
+    func getCacheStatistics() -> CacheStatistics {
+        return cacheService.getStatistics()
+    }
+
+    /// Manually clear cache if needed
+    func clearCache() {
+        cacheService.clear()
+        logger.info("Cleared food service cache")
+    }
+
+    /// Clean up expired entries
+    func cleanupCache() {
+        cacheService.cleanupExpiredEntries()
+        logger.debug("Cleaned up expired cache entries")
     }
 }

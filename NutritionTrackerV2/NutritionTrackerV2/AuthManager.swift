@@ -274,7 +274,7 @@ class AuthManager: ObservableObject {
 
     /// Check session validity and refresh if necessary
     func validateSession() async -> Bool {
-        guard isAuthenticated, let session = currentSession else {
+        guard isAuthenticated, let _ = currentSession else {
             return false
         }
 
@@ -463,7 +463,9 @@ class AuthManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.handleAppDidEnterBackground()
+            Task { @MainActor in
+                self?.handleAppDidEnterBackground()
+            }
         }
 
         NotificationCenter.default.addObserver(
@@ -471,7 +473,9 @@ class AuthManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.handleAppWillEnterForeground()
+            Task { @MainActor in
+                self?.handleAppWillEnterForeground()
+            }
         }
     }
 

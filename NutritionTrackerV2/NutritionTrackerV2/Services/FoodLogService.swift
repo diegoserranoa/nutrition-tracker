@@ -63,6 +63,7 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
 
     private let supabaseManager: SupabaseManager
     private let foodService: FoodService
+    private let cacheService: CacheService
     private let logger = Logger(subsystem: "com.nutritiontracker.foodlogservice", category: "FoodLogService")
     private let tableName = "food_logs"
 
@@ -77,9 +78,10 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
 
     // MARK: - Initialization
 
-    init(supabaseManager: SupabaseManager? = nil, foodService: FoodService? = nil) {
+    init(supabaseManager: SupabaseManager? = nil, foodService: FoodService? = nil, cacheService: CacheService? = nil) {
         self.supabaseManager = supabaseManager ?? SupabaseManager.shared
-        self.foodService = foodService ?? FoodService(supabaseManager: supabaseManager)
+        self.cacheService = cacheService ?? CacheService.shared
+        self.foodService = foodService ?? FoodService(supabaseManager: supabaseManager, cacheService: self.cacheService)
     }
 
     // MARK: - CRUD Operations
@@ -391,6 +393,12 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
     func getDailyNutritionSummary(for date: Date, userId: UUID) async throws -> DailyNutritionSummary {
         logger.info("Calculating daily nutrition summary for date: \\(date)")
 
+        // Check cache first
+        if let cachedSummary = cacheService.getCachedDailyNutritionSummary(for: date, userId: userId) {
+            logger.debug("Retrieved daily nutrition summary from cache")
+            return cachedSummary
+        }
+
         // Get all food logs for the day
         let foodLogs = try await getFoodLogsForDate(date, userId: userId)
 
@@ -406,6 +414,9 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
         // Calculate the summary
         let summary = DailyNutritionSummary.from(logs: logsWithFood, for: date)
         logger.info("Successfully calculated daily summary with \\(summary.totalCalories) calories")
+
+        // Cache the summary
+        cacheService.cacheDailyNutritionSummary(summary, for: date, userId: userId)
 
         return summary
     }

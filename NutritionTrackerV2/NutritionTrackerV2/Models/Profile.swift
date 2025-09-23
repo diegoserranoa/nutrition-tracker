@@ -401,7 +401,7 @@ extension Profile {
             preferences: ProfilePreferences.defaultPreferences,
             preferredUnits: .metric,
             timezone: TimeZone.current.identifier,
-            language: Locale.current.languageCode,
+            language: Locale.current.language.languageCode?.identifier,
             isPublic: false,
             shareProgress: false,
             allowDataExport: true,
