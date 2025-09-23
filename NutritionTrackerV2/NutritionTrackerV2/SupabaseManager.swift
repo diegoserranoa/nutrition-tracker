@@ -79,6 +79,10 @@ class SupabaseManager: ObservableObject {
         return supabaseClient.storage
     }
 
+    var realtime: RealtimeClient {
+        return supabaseClient.realtime
+    }
+
     // MARK: - Authentication Methods
     func signUp(email: String, password: String) async throws {
         isLoading = true
