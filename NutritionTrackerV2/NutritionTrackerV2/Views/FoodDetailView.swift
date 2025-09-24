@@ -78,6 +78,12 @@ struct FoodDetailView: View {
                     if let saturatedFat = food.saturatedFat {
                         NutrientRow(label: "Saturated Fat", value: saturatedFat, unit: "g")
                     }
+                    if let unsaturatedFat = food.unsaturatedFat {
+                        NutrientRow(label: "Unsaturated Fat", value: unsaturatedFat, unit: "g")
+                    }
+                    if let transFat = food.transFat {
+                        NutrientRow(label: "Trans Fat", value: transFat, unit: "g")
+                    }
                 }
 
                 // Micronutrients (show only if present)
@@ -105,14 +111,27 @@ struct FoodDetailView: View {
     private func getMicronutrients() -> [(label: String, value: Double, unit: String)] {
         var nutrients: [(String, Double, String)] = []
 
+        // Minerals
         if let sodium = food.sodium { nutrients.append(("Sodium", sodium, "mg")) }
         if let potassium = food.potassium { nutrients.append(("Potassium", potassium, "mg")) }
         if let calcium = food.calcium { nutrients.append(("Calcium", calcium, "mg")) }
         if let iron = food.iron { nutrients.append(("Iron", iron, "mg")) }
+        if let magnesium = food.magnesium { nutrients.append(("Magnesium", magnesium, "mg")) }
+        if let phosphorus = food.phosphorus { nutrients.append(("Phosphorus", phosphorus, "mg")) }
+        if let zinc = food.zinc { nutrients.append(("Zinc", zinc, "mg")) }
+
+        // Vitamins
         if let vitaminA = food.vitaminA { nutrients.append(("Vitamin A", vitaminA, "mcg")) }
         if let vitaminC = food.vitaminC { nutrients.append(("Vitamin C", vitaminC, "mg")) }
         if let vitaminD = food.vitaminD { nutrients.append(("Vitamin D", vitaminD, "mcg")) }
         if let vitaminE = food.vitaminE { nutrients.append(("Vitamin E", vitaminE, "mg")) }
+        if let vitaminK = food.vitaminK { nutrients.append(("Vitamin K", vitaminK, "mcg")) }
+        if let vitaminB1 = food.vitaminB1 { nutrients.append(("Vitamin B1 (Thiamin)", vitaminB1, "mg")) }
+        if let vitaminB2 = food.vitaminB2 { nutrients.append(("Vitamin B2 (Riboflavin)", vitaminB2, "mg")) }
+        if let vitaminB3 = food.vitaminB3 { nutrients.append(("Vitamin B3 (Niacin)", vitaminB3, "mg")) }
+        if let vitaminB6 = food.vitaminB6 { nutrients.append(("Vitamin B6", vitaminB6, "mg")) }
+        if let vitaminB12 = food.vitaminB12 { nutrients.append(("Vitamin B12", vitaminB12, "mcg")) }
+        if let folate = food.folate { nutrients.append(("Folate", folate, "mcg")) }
 
         return nutrients
     }
