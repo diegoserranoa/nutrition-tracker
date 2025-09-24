@@ -297,12 +297,16 @@ class CacheService: ObservableObject, CacheServiceProtocol {
     func invalidateUserData(userId: UUID) {
         let userPrefix = userId.uuidString
 
-        // Remove nutrition summaries for this user
+        // Remove any user-specific data from metadata cache
         for key in metadataCache.keys {
             if key.contains(userPrefix) {
                 metadataCache.removeValue(forKey: key)
             }
         }
+
+        // Clear nutrition summary cache since NSCache doesn't support selective removal
+        // Daily nutrition summaries are user-specific, so clearing all is the only option
+        nutritionSummaryCache.removeAllObjects()
 
         logger.info("Invalidated cache data for user: \(userId)")
     }
