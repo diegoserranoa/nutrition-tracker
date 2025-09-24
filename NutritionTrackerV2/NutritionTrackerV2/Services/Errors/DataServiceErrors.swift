@@ -67,6 +67,11 @@ enum DataServiceError: Error, LocalizedError, CustomStringConvertible {
     case mergeConflict
     case checksumMismatch
 
+    // MARK: - Operation Control Errors
+    case operationCancelled
+    case operationTimeout
+    case requestTimeout
+
     // MARK: - System Errors
     case memoryPressure
     case diskSpaceFull
@@ -175,6 +180,14 @@ enum DataServiceError: Error, LocalizedError, CustomStringConvertible {
         case .checksumMismatch:
             return "Data integrity check failed."
 
+        // Operation Control Errors
+        case .operationCancelled:
+            return "Operation was cancelled."
+        case .operationTimeout:
+            return "Operation timed out."
+        case .requestTimeout:
+            return "Request timed out."
+
         // System Errors
         case .memoryPressure:
             return "Insufficient memory available."
@@ -249,10 +262,11 @@ enum DataServiceError: Error, LocalizedError, CustomStringConvertible {
     var isRetryable: Bool {
         switch self {
         case .networkTimeout, .networkConnectionLost, .serverUnavailable,
-             .internalServerError, .serviceUnavailable, .requestRateLimit:
+             .internalServerError, .serviceUnavailable, .requestRateLimit,
+             .operationTimeout, .requestTimeout:
             return true
         case .unauthorized, .forbidden, .notFound, .validationFailed,
-             .authenticationFailed, .duplicateEntry:
+             .authenticationFailed, .duplicateEntry, .operationCancelled:
             return false
         default:
             return false
@@ -299,9 +313,9 @@ enum DataServiceError: Error, LocalizedError, CustomStringConvertible {
             return .critical
         case .authenticationFailed, .sessionExpired, .dataCorrupted:
             return .high
-        case .validationFailed, .networkTimeout, .syncConflict:
+        case .validationFailed, .networkTimeout, .syncConflict, .operationTimeout, .requestTimeout:
             return .medium
-        case .requestRateLimit, .featureNotAvailable:
+        case .requestRateLimit, .featureNotAvailable, .operationCancelled:
             return .low
         default:
             return .medium

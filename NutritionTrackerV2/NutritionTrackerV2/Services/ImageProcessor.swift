@@ -186,7 +186,9 @@ class ImageProcessor {
             finalSize = targetSize
         }
 
-        let renderer = UIGraphicsImageRenderer(size: finalSize)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        let renderer = UIGraphicsImageRenderer(size: finalSize, format: format)
 
         let resizedImage = renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: finalSize))

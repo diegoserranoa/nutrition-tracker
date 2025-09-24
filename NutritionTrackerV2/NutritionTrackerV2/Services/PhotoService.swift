@@ -10,6 +10,17 @@ import UIKit
 import Supabase
 import OSLog
 
+// MARK: - Supabase Manager Protocol
+
+protocol SupabaseManagerProtocol {
+    var isAuthenticated: Bool { get }
+    var currentUser: User? { get }
+
+    func uploadFile(bucket: String, path: String, data: Data, contentType: String) async throws -> String
+    func getPublicURL(bucket: String, path: String) throws -> String
+    func deleteFile(bucket: String, fileName: String) async throws
+}
+
 // MARK: - Photo Upload Progress
 
 struct PhotoUploadProgress {
@@ -53,6 +64,9 @@ protocol PhotoServiceProtocol {
     func downloadPhoto(from url: String) async throws -> UIImage
     func deletePhoto(fileName: String) async throws
     func getPhotoURL(fileName: String) async throws -> String
+    func getCachedPhotoURL(fileName: String) async throws -> String
+    func cancelCurrentUpload()
+    func clearURLCache()
 }
 
 // MARK: - Photo Service Implementation
@@ -62,7 +76,7 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
 
     // MARK: - Properties
 
-    private let supabaseManager: SupabaseManager
+    private let supabaseManager: SupabaseManagerProtocol
     private let logger = Logger(subsystem: "com.nutritiontracker.photoservice", category: "PhotoService")
     private let bucketName = "food-photos"
 
@@ -70,6 +84,13 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
     @Published var isUploading = false
     @Published var uploadProgress: PhotoUploadProgress?
     @Published var currentError: DataServiceError?
+    @Published var isRetrying = false
+    @Published var retryCount = 0
+
+    // Upload management
+    private var currentUploadTask: Task<PhotoUploadResult, Error>?
+    private let maxRetryAttempts = 3
+    private let baseRetryDelay: TimeInterval = 1.0
 
     // Dependencies
     private let imageProcessor: ImageProcessor
@@ -84,7 +105,7 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
 
     // MARK: - Initialization
 
-    init(supabaseManager: SupabaseManager = SupabaseManager.shared,
+    nonisolated init(supabaseManager: SupabaseManagerProtocol,
          imageProcessor: ImageProcessor = ImageProcessor()) {
         self.supabaseManager = supabaseManager
         self.imageProcessor = imageProcessor
@@ -112,70 +133,20 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
         }
 
         do {
-            // Validate authentication
-            guard supabaseManager.isAuthenticated,
-                  let currentUser = supabaseManager.currentUser else {
-                throw DataServiceError.authenticationRequired
-            }
-
-            // Process image (resize, compress, optimize)
-            let processingResult = try await processImage(
-                image,
+            return try await performUploadWithRetry(
+                image: image,
                 compressionQuality: compressionQuality,
                 targetSize: targetSize,
-                maintainAspectRatio: maintainAspectRatio
+                maintainAspectRatio: maintainAspectRatio,
+                progressHandler: progressHandler
             )
-
-            // Generate unique filename with UUID
-            let fileName = PhotoFileNaming.generateUniqueFileName(for: currentUser.id)
-
-            // Get processed image data
-            let imageData = try compressImage(processingResult.processedImage, quality: compressionQuality)
-
-            // Create progress tracking
-            let totalBytes = Int64(imageData.count)
-            let initialProgress = PhotoUploadProgress(bytesUploaded: 0, totalBytes: totalBytes)
-            uploadProgress = initialProgress
-            progressHandler?(initialProgress)
-
-            // Upload to Supabase Storage
-            let publicURL = try await performUpload(
-                data: imageData,
-                fileName: fileName,
-                contentType: "image/jpeg"
-            )
-
-            // Final progress update
-            let finalProgress = PhotoUploadProgress(bytesUploaded: totalBytes, totalBytes: totalBytes)
-            uploadProgress = finalProgress
-            progressHandler?(finalProgress)
-
-            let result = PhotoUploadResult(
-                publicURL: publicURL,
-                fileName: fileName,
-                fileSize: Int64(imageData.count),
-                contentType: "image/jpeg"
-            )
-
-            logger.info("Photo upload completed successfully: \(fileName)")
-            logger.info("Processing stats - Original: \(processingResult.originalSize.width)x\(processingResult.originalSize.height), Final: \(processingResult.processedSize.width)x\(processingResult.processedSize.height)")
-            logger.info("Compression: \(Int(processingResult.compressionPercent))%, Operations: \(processingResult.appliedOperations.joined(separator: ", "))")
-
-            return result
-
-        } catch ImageProcessingError.fileSizeTooLarge(let current, let max) {
-            let error = DataServiceError.valueTooLarge(field: "fileSize", max: Double(max / 1024 / 1024))
-            currentError = error
-            logger.error("Photo upload failed - file too large: \(current) bytes")
-            throw error
-        } catch let error as ImageProcessingError {
-            let serviceError = DataServiceError.invalidData("Image processing failed: \(error.localizedDescription)")
-            currentError = serviceError
-            logger.error("Photo upload failed with ImageProcessingError: \(error.localizedDescription)")
-            throw serviceError
         } catch let error as DataServiceError {
             currentError = error
             logger.error("Photo upload failed with DataServiceError: \(error.localizedDescription)")
+            throw error
+        } catch let error as ImageProcessingError {
+            // Re-throw ImageProcessingError without conversion to preserve original error type
+            logger.error("Photo upload failed with ImageProcessingError: \(error.localizedDescription)")
             throw error
         } catch {
             let serviceError = DataServiceErrorFactory.fromSupabaseError(error)
@@ -245,9 +216,7 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
             }
 
             // Delete from Supabase Storage
-            try await supabaseManager.storage
-                .from(bucketName)
-                .remove(paths: [fileName])
+            try await supabaseManager.deleteFile(bucket: bucketName, fileName: fileName)
 
             logger.info("Photo deletion completed successfully: \(fileName)")
 
@@ -266,10 +235,30 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
     // MARK: - Get Photo URL
 
     func getPhotoURL(fileName: String) async throws -> String {
+        logger.info("Retrieving public URL for photo: \(fileName)")
+
+        currentError = nil
+
         do {
-            return try supabaseManager.getPublicURL(bucket: bucketName, path: fileName)
+            let publicURL = try supabaseManager.getPublicURL(bucket: bucketName, path: fileName)
+
+            // Validate URL format
+            guard URL(string: publicURL) != nil else {
+                throw DataServiceError.invalidData("Invalid public URL format returned")
+            }
+
+            logger.info("Successfully retrieved public URL for photo: \(fileName)")
+            return publicURL
+
+        } catch let error as DataServiceError {
+            currentError = error
+            logger.error("Failed to get photo URL with DataServiceError: \(error.localizedDescription)")
+            throw error
         } catch {
-            throw DataServiceErrorFactory.fromSupabaseError(error)
+            let serviceError = DataServiceErrorFactory.fromSupabaseError(error)
+            currentError = serviceError
+            logger.error("Failed to get photo URL with unexpected error: \(error.localizedDescription)")
+            throw serviceError
         }
     }
 
@@ -353,12 +342,260 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
             contentType: contentType
         )
     }
+
+    // MARK: - Upload with Retry Logic
+
+    private func performUploadWithRetry(
+        image: UIImage,
+        compressionQuality: CGFloat,
+        targetSize: CGSize?,
+        maintainAspectRatio: Bool,
+        progressHandler: ((PhotoUploadProgress) -> Void)?
+    ) async throws -> PhotoUploadResult {
+
+        // Create upload task for cancellation support
+        let uploadTask = Task<PhotoUploadResult, Error> {
+            // Validate authentication
+            guard supabaseManager.isAuthenticated,
+                  let currentUser = supabaseManager.currentUser else {
+                throw DataServiceError.authenticationRequired
+            }
+
+            // Process image (resize, compress, optimize)
+            let processingResult = try await processImage(
+                image,
+                compressionQuality: compressionQuality,
+                targetSize: targetSize,
+                maintainAspectRatio: maintainAspectRatio
+            )
+
+            // Generate unique filename with UUID
+            let fileName = PhotoFileNaming.generateUniqueFileName(for: currentUser.id)
+
+            // Get processed image data
+            let imageData = try compressImage(processingResult.processedImage, quality: compressionQuality)
+
+            // Create progress tracking
+            let totalBytes = Int64(imageData.count)
+            let initialProgress = PhotoUploadProgress(bytesUploaded: 0, totalBytes: totalBytes)
+            uploadProgress = initialProgress
+            progressHandler?(initialProgress)
+
+            // Attempt upload with retry logic
+            var lastError: Error?
+
+            for attempt in 1...maxRetryAttempts {
+                do {
+                    // Check for cancellation
+                    try Task.checkCancellation()
+
+                    retryCount = attempt - 1
+
+                    if attempt > 1 {
+                        isRetrying = true
+                        logger.info("Retrying photo upload, attempt \(attempt)/\(self.maxRetryAttempts)")
+
+                        // Exponential backoff delay
+                        let delay = baseRetryDelay * pow(2.0, Double(attempt - 2))
+                        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+
+                        // Check for cancellation after delay
+                        try Task.checkCancellation()
+                    }
+
+                    // Upload to Supabase Storage
+                    let publicURL = try await performUpload(
+                        data: imageData,
+                        fileName: fileName,
+                        contentType: "image/jpeg"
+                    )
+
+                    // Success - reset retry state
+                    isRetrying = false
+                    retryCount = 0
+
+                    // Final progress update
+                    let finalProgress = PhotoUploadProgress(bytesUploaded: totalBytes, totalBytes: totalBytes)
+                    uploadProgress = finalProgress
+                    progressHandler?(finalProgress)
+
+                    let result = PhotoUploadResult(
+                        publicURL: publicURL,
+                        fileName: fileName,
+                        fileSize: Int64(imageData.count),
+                        contentType: "image/jpeg"
+                    )
+
+                    logger.info("Photo upload completed successfully: \(fileName)")
+                    logger.info("Processing stats - Original: \(processingResult.originalSize.width)x\(processingResult.originalSize.height), Final: \(processingResult.processedSize.width)x\(processingResult.processedSize.height)")
+                    logger.info("Compression: \(Int(processingResult.compressionPercent))%, Operations: \(processingResult.appliedOperations.joined(separator: ", "))")
+
+                    return result
+
+                } catch is CancellationError {
+                    logger.info("Photo upload cancelled by user")
+                    throw DataServiceError.operationCancelled
+                } catch {
+                    lastError = error
+                    logger.warning("Upload attempt \(attempt) failed: \(error.localizedDescription)")
+
+                    // Don't retry on certain errors
+                    if isNonRetryableError(error) {
+                        break
+                    }
+                }
+            }
+
+            // All retries exhausted
+            isRetrying = false
+            let finalError = lastError ?? DataServiceError.unknown(NSError(domain: "PhotoService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unknown upload error"]))
+            logger.error("Photo upload failed after \(self.maxRetryAttempts) attempts: \(finalError.localizedDescription)")
+
+            throw DataServiceErrorFactory.fromSupabaseError(finalError)
+        }
+
+        // Store task for potential cancellation
+        currentUploadTask = uploadTask
+
+        defer {
+            currentUploadTask = nil
+            isRetrying = false
+            retryCount = 0
+        }
+
+        return try await uploadTask.value
+    }
+
+    // MARK: - Upload Cancellation
+
+    func cancelCurrentUpload() {
+        logger.info("Cancelling current photo upload")
+        currentUploadTask?.cancel()
+        currentUploadTask = nil
+        isUploading = false
+        isRetrying = false
+        retryCount = 0
+        uploadProgress = nil
+        currentError = DataServiceError.operationCancelled
+    }
+
+    // MARK: - Error Classification
+
+    private func isNonRetryableError(_ error: Error) -> Bool {
+        if let dataError = error as? DataServiceError {
+            switch dataError {
+            case .authenticationRequired, .forbidden, .invalidData, .valueTooLarge, .jsonEncodingFailed:
+                return true // Don't retry these
+            case .networkUnavailable, .requestTimeout, .serverUnavailable, .internalServerError, .networkTimeout:
+                return false // Retry these
+            case .missingResponseData, .jsonDecodingFailed, .operationCancelled:
+                return true // Don't retry these
+            default:
+                return false // Retry unknown errors
+            }
+        }
+        return false // Retry unknown errors
+    }
+
+    // MARK: - Enhanced Batch Upload with Individual Error Handling
+
+    /// Upload multiple photos with individual retry and error handling
+    func uploadPhotosWithDetailedResults(
+        _ images: [UIImage],
+        compressionQuality: CGFloat = Config.defaultCompressionQuality,
+        targetSize: CGSize? = nil,
+        maintainAspectRatio: Bool = true,
+        progressHandler: ((Int, Int, PhotoUploadProgress?) -> Void)? = nil
+    ) async -> [(index: Int, result: Result<PhotoUploadResult, Error>)] {
+
+        logger.info("Starting detailed batch photo upload for \(images.count) images")
+
+        return await withTaskGroup(of: (Int, Result<PhotoUploadResult, Error>).self) { group in
+            // Add tasks for each image
+            for (index, image) in images.enumerated() {
+                group.addTask { [weak self] in
+                    do {
+                        let result = try await self?.uploadPhoto(
+                            image,
+                            compressionQuality: compressionQuality,
+                            targetSize: targetSize,
+                            maintainAspectRatio: maintainAspectRatio
+                        ) { progress in
+                            progressHandler?(index + 1, images.count, progress)
+                        }
+
+                        guard let result = result else {
+                            throw DataServiceError.unknown(NSError(domain: "PhotoService", code: -1, userInfo: [NSLocalizedDescriptionKey: "PhotoService deallocated during upload"]))
+                        }
+
+                        return (index, .success(result))
+                    } catch {
+                        return (index, .failure(error))
+                    }
+                }
+            }
+
+            // Collect results
+            var results: [(Int, Result<PhotoUploadResult, Error>)] = []
+            for await result in group {
+                results.append(result)
+            }
+
+            // Sort by index to maintain original order
+            results.sort { $0.0 < $1.0 }
+
+            let successCount = results.compactMap { $0.1.isPhotoUploadSuccess ? 1 : nil }.count
+            logger.info("Detailed batch upload completed: \(successCount)/\(results.count) photos uploaded successfully")
+
+            return results
+        }
+    }
+
+    // MARK: - URL Validation and Caching
+
+    private var urlCache: [String: (url: String, timestamp: Date)] = [:]
+    private let urlCacheTimeout: TimeInterval = 300 // 5 minutes
+
+    func getCachedPhotoURL(fileName: String) async throws -> String {
+        // Check cache first
+        if let cached = urlCache[fileName],
+           Date().timeIntervalSince(cached.timestamp) < urlCacheTimeout {
+            logger.info("Returning cached URL for photo: \(fileName)")
+            return cached.url
+        }
+
+        // Get fresh URL
+        let url = try await getPhotoURL(fileName: fileName)
+
+        // Cache the result
+        urlCache[fileName] = (url: url, timestamp: Date())
+
+        return url
+    }
+
+    func clearURLCache() {
+        urlCache.removeAll()
+        logger.info("Photo URL cache cleared")
+    }
+}
+
+// MARK: - Result Extension for Success Check
+
+private extension Result where Success == PhotoUploadResult, Failure == Error {
+    var isPhotoUploadSuccess: Bool {
+        switch self {
+        case .success:
+            return true
+        case .failure:
+            return false
+        }
+    }
 }
 
 // MARK: - Singleton Access
 
 extension PhotoService {
-    static let shared = PhotoService(
+    nonisolated static let shared = PhotoService(
         supabaseManager: SupabaseManager.shared,
         imageProcessor: ImageProcessor()
     )

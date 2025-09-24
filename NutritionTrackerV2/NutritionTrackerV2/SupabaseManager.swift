@@ -9,8 +9,8 @@ import Foundation
 import Supabase
 
 @MainActor
-class SupabaseManager: ObservableObject {
-    static let shared = SupabaseManager()
+class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
+    nonisolated static let shared = SupabaseManager()
 
     // MARK: - Configuration
     private struct Config {
@@ -40,7 +40,7 @@ class SupabaseManager: ObservableObject {
     }
 
     // MARK: - Initialization
-    private init() {
+    nonisolated private init() {
         // Load configuration
         guard let supabaseURL = URL(string: Config.url) else {
             fatalError("Invalid Supabase URL")
@@ -56,7 +56,7 @@ class SupabaseManager: ObservableObject {
         setupAuthListener()
 
         // Check initial auth state and validate connection
-        Task {
+        Task { @MainActor in
             await checkAuthState()
             let _ = await validateConnection()
         }
@@ -189,6 +189,12 @@ class SupabaseManager: ObservableObject {
             .absoluteString
     }
 
+    func deleteFile(bucket: String, fileName: String) async throws {
+        try await storage
+            .from(bucket)
+            .remove(paths: [fileName])
+    }
+
     // MARK: - Connection & Health Checks
     func validateConnection() async -> Bool {
         connectionStatus = .connecting
@@ -244,8 +250,8 @@ class SupabaseManager: ObservableObject {
     // TODO: Implement real-time subscriptions with RealtimeV2 API
 
     // MARK: - Private Methods
-    private func setupAuthListener() {
-        Task {
+    nonisolated private func setupAuthListener() {
+        Task { @MainActor in
             for await (event, session) in auth.authStateChanges {
                 await handleAuthStateChange(event: event, session: session)
             }
