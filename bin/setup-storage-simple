@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Simple Supabase Storage Setup using CLI
+# Creates food-photos bucket with proper configuration
+
+set -e
+
+echo "🚀 Setting up Supabase storage bucket for food photos..."
+
+# 1. First, link the project (if needed)
+echo "📡 Checking Supabase project link..."
+if [ ! -f .supabase/config.toml ]; then
+    echo "❌ Project not linked. Run this first:"
+    echo "   supabase link --project-ref YOUR_PROJECT_REF"
+    echo "   (Get YOUR_PROJECT_REF from your Supabase dashboard URL)"
+    exit 1
+fi
+
+# 2. Create the bucket using SQL
+echo "📦 Creating food-photos storage bucket..."
+supabase db push --include-seed=false << 'EOF'
+-- Create storage bucket
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+    'food-photos',
+    'food-photos',
+    true,
+    52428800, -- 50MB
+    ARRAY['image/jpeg', 'image/png', 'image/heic', 'image/webp']
+) ON CONFLICT (id) DO NOTHING;
+EOF
+
+# 3. Apply storage policies
+echo "🔐 Setting up storage policies..."
+supabase db push --include-seed=false << 'EOF'
+-- Enable RLS
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+-- Public read access
+CREATE POLICY IF NOT EXISTS "Public read access for food photos"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'food-photos');
+
+-- Authenticated upload
+CREATE POLICY IF NOT EXISTS "Authenticated users can upload food photos"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'food-photos');
+
+-- Users can update their own photos
+CREATE POLICY IF NOT EXISTS "Users can update their own food photos"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'food-photos' AND owner = auth.uid());
+
+-- Users can delete their own photos
+CREATE POLICY IF NOT EXISTS "Users can delete their own food photos"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'food-photos' AND owner = auth.uid());
+EOF
+
+# 4. Verify setup
+echo "✅ Verifying storage setup..."
+supabase storage ls
+
+echo "🎉 Storage bucket setup complete!"
+echo "   Bucket: food-photos"
+echo "   Public read: ✅"
+echo "   Auth required for upload: ✅"
+echo "   File size limit: 50MB"

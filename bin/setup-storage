@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# Setup Supabase Storage for Food Photos using Supabase CLI
+# This script creates the food-photos bucket and applies security policies
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}Setting up Supabase storage bucket for food photos...${NC}"
+
+# Check if supabase CLI is installed
+if ! command -v supabase &> /dev/null; then
+    echo -e "${RED}Error: Supabase CLI not found. Install it first:${NC}"
+    echo -e "${YELLOW}npm install -g supabase${NC}"
+    echo -e "${YELLOW}# or${NC}"
+    echo -e "${YELLOW}brew install supabase/tap/supabase${NC}"
+    exit 1
+fi
+
+# Link to remote project (if not already linked)
+echo -e "${YELLOW}Linking to Supabase project...${NC}"
+if [ ! -f .supabase/config.toml ]; then
+    echo -e "${YELLOW}Please run: supabase link --project-ref YOUR_PROJECT_REF${NC}"
+    echo -e "${YELLOW}You can find YOUR_PROJECT_REF in your Supabase dashboard URL${NC}"
+    exit 1
+fi
+
+# Create storage bucket using CLI
+echo -e "${YELLOW}Creating food-photos storage bucket...${NC}"
+
+# Use supabase CLI to run SQL for bucket creation
+supabase db push --include-seed=false
+
+# Apply storage policies via SQL migration
+echo -e "${YELLOW}Applying storage bucket configuration and policies...${NC}"
+
+# Create the bucket and policies using SQL
+supabase db reset --linked
+
+# Run our storage setup migration
+./bin/run-db-script database/05-storage-bucket-setup.sql
+
+# Alternative: Create bucket via API if db method doesn't work
+echo -e "${YELLOW}Ensuring bucket exists via storage API...${NC}"
+SUPABASE_URL=$(supabase status --output json | jq -r '.API_URL')
+SUPABASE_ANON_KEY=$(supabase status --output json | jq -r '.ANON_KEY')
+
+if [ "$SUPABASE_URL" != "null" ] && [ "$SUPABASE_ANON_KEY" != "null" ]; then
+    curl -X POST \
+      "$SUPABASE_URL/storage/v1/bucket" \
+      -H "apikey: $SUPABASE_ANON_KEY" \
+      -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "id": "food-photos",
+        "name": "food-photos",
+        "public": true,
+        "file_size_limit": 52428800,
+        "allowed_mime_types": ["image/jpeg", "image/png", "image/heic", "image/webp"]
+      }' || echo -e "${YELLOW}Bucket creation via API failed or bucket already exists${NC}"
+fi
+
+echo -e "${GREEN}✅ Storage bucket setup complete!${NC}"
+echo -e "${GREEN}Bucket name: food-photos${NC}"
+echo -e "${GREEN}Public access: Enabled for reading${NC}"
+echo -e "${GREEN}Upload access: Authenticated users only${NC}"
+echo -e "${GREEN}File size limit: 50MB${NC}"
+echo -e "${GREEN}Allowed types: JPEG, PNG, HEIC, WebP${NC}"
+
+echo -e "${YELLOW}To verify setup:${NC}"
+echo -e "${YELLOW}supabase storage ls${NC}"

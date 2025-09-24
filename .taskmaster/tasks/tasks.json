@@ -267,7 +267,7 @@
             "description": "Setup Supabase storage bucket with proper policies for public read access and secure uploads",
             "dependencies": [],
             "details": "Create a new storage bucket in Supabase dashboard named 'food-photos'. Configure bucket policies to allow public read access while restricting upload permissions to authenticated users. Set up proper CORS settings for iOS app access. Configure bucket settings for optimal performance and security.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -614,7 +614,7 @@
     ],
     "metadata": {
       "created": "2025-09-22T23:34:34.370Z",
-      "updated": "2025-09-23T22:08:24.841Z",
+      "updated": "2025-09-24T06:44:20.700Z",
       "description": "Tasks for master context"
     }
   }

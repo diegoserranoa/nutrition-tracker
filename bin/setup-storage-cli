@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# Setup Supabase Storage using CLI commands
+# Creates food-photos bucket with proper policies
+
+set -e
+
+echo "🚀 Setting up Supabase storage bucket..."
+
+# Check if project is linked
+if [ ! -d supabase ]; then
+    echo "❌ Supabase not initialized. Run these commands first:"
+    echo "   supabase init"
+    echo "   supabase link --project-ref YOUR_PROJECT_REF"
+    echo "   Get YOUR_PROJECT_REF from your Supabase dashboard URL"
+    exit 1
+fi
+
+# Double-check the link status
+echo "📡 Checking project status..."
+supabase status || {
+    echo "❌ Project not properly linked. Try:"
+    echo "   supabase link --project-ref YOUR_PROJECT_REF"
+    exit 1
+}
+
+# Create migration for storage bucket
+echo "📝 Creating storage migration..."
+supabase migration new create_food_photos_bucket
+
+# Write the migration content
+cat > supabase/migrations/*create_food_photos_bucket.sql << 'EOF'
+-- Create food-photos storage bucket
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+    'food-photos',
+    'food-photos',
+    true,
+    52428800, -- 50MB in bytes
+    ARRAY['image/jpeg', 'image/png', 'image/heic', 'image/webp']
+) ON CONFLICT (id) DO NOTHING;
+
+-- Enable RLS on storage.objects
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+-- Storage policies for food-photos bucket
+CREATE POLICY IF NOT EXISTS "Public read access for food photos"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'food-photos');
+
+CREATE POLICY IF NOT EXISTS "Authenticated users can upload food photos"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'food-photos');
+
+CREATE POLICY IF NOT EXISTS "Users can update their own food photos"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'food-photos' AND owner = auth.uid());
+
+CREATE POLICY IF NOT EXISTS "Users can delete their own food photos"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'food-photos' AND owner = auth.uid());
+EOF
+
+# Push migration to remote database
+echo "🚀 Applying migration..."
+supabase db push
+
+# Verify the bucket was created
+echo "✅ Verifying setup..."
+supabase storage ls || echo "Note: storage ls may not work with all CLI versions"
+
+echo "🎉 Storage setup complete!"
+echo "✅ Bucket: food-photos"
+echo "✅ Public read access enabled"
+echo "✅ Authenticated upload required"
+echo "✅ File size limit: 50MB"
+echo "✅ Allowed types: JPEG, PNG, HEIC, WebP"

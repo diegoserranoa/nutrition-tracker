@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Direct Supabase Storage Setup
+# Creates storage bucket using database connection directly
+
+set -e
+
+echo "🚀 Setting up Supabase storage bucket directly..."
+
+# Run the storage setup SQL using our existing database script runner
+echo "📦 Creating food-photos bucket and policies..."
+./bin/run-db-script database/05-storage-bucket-setup.sql
+
+echo "✅ Storage bucket setup complete!"
+echo "   🪣 Bucket: food-photos"
+echo "   👀 Public read: Enabled"
+echo "   🔐 Upload: Authenticated users only"
+echo "   📏 Size limit: 50MB"
+echo "   📷 Types: JPEG, PNG, HEIC, WebP"
+echo ""
+echo "You can now:"
+echo "   • Upload photos via the iOS app"
+echo "   • View photos at: YOUR_SUPABASE_URL/storage/v1/object/public/food-photos/filename"
+echo "   • Test upload via Supabase dashboard Storage section"
