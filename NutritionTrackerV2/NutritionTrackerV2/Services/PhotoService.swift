@@ -47,10 +47,12 @@ struct PhotoUploadResult {
 protocol PhotoServiceProtocol {
     func uploadPhoto(_ image: UIImage,
                     compressionQuality: CGFloat,
+                    targetSize: CGSize?,
+                    maintainAspectRatio: Bool,
                     progressHandler: ((PhotoUploadProgress) -> Void)?) async throws -> PhotoUploadResult
     func downloadPhoto(from url: String) async throws -> UIImage
     func deletePhoto(fileName: String) async throws
-    func getPhotoURL(fileName: String) throws -> String
+    func getPhotoURL(fileName: String) async throws -> String
 }
 
 // MARK: - Photo Service Implementation
@@ -69,6 +71,9 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
     @Published var uploadProgress: PhotoUploadProgress?
     @Published var currentError: DataServiceError?
 
+    // Dependencies
+    private let imageProcessor: ImageProcessor
+
     // Configuration
     private struct Config {
         static let maxFileSize: Int64 = 50 * 1024 * 1024 // 50MB
@@ -79,8 +84,10 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
 
     // MARK: - Initialization
 
-    init(supabaseManager: SupabaseManager = SupabaseManager.shared) {
+    init(supabaseManager: SupabaseManager = SupabaseManager.shared,
+         imageProcessor: ImageProcessor = ImageProcessor()) {
         self.supabaseManager = supabaseManager
+        self.imageProcessor = imageProcessor
         logger.info("PhotoService initialized")
     }
 
@@ -88,9 +95,11 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
 
     func uploadPhoto(_ image: UIImage,
                     compressionQuality: CGFloat = Config.defaultCompressionQuality,
+                    targetSize: CGSize? = nil,
+                    maintainAspectRatio: Bool = true,
                     progressHandler: ((PhotoUploadProgress) -> Void)? = nil) async throws -> PhotoUploadResult {
 
-        logger.info("Starting photo upload with compression quality: \(compressionQuality)")
+        logger.info("Starting photo upload with enhanced processing")
 
         // Set loading state
         isUploading = true
@@ -109,14 +118,19 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
                 throw DataServiceError.authenticationRequired
             }
 
-            // Prepare image data
-            let imageData = try prepareImageData(image, compressionQuality: compressionQuality)
+            // Process image (resize, compress, optimize)
+            let processingResult = try await processImage(
+                image,
+                compressionQuality: compressionQuality,
+                targetSize: targetSize,
+                maintainAspectRatio: maintainAspectRatio
+            )
 
-            // Validate file size
-            try validateFileSize(imageData.count)
+            // Generate unique filename with UUID
+            let fileName = PhotoFileNaming.generateUniqueFileName(for: currentUser.id)
 
-            // Generate unique filename
-            let fileName = generateFileName(for: currentUser.id)
+            // Get processed image data
+            let imageData = try compressImage(processingResult.processedImage, quality: compressionQuality)
 
             // Create progress tracking
             let totalBytes = Int64(imageData.count)
@@ -144,8 +158,21 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
             )
 
             logger.info("Photo upload completed successfully: \(fileName)")
+            logger.info("Processing stats - Original: \(processingResult.originalSize.width)x\(processingResult.originalSize.height), Final: \(processingResult.processedSize.width)x\(processingResult.processedSize.height)")
+            logger.info("Compression: \(Int(processingResult.compressionPercent))%, Operations: \(processingResult.appliedOperations.joined(separator: ", "))")
+
             return result
 
+        } catch ImageProcessingError.fileSizeTooLarge(let current, let max) {
+            let error = DataServiceError.valueTooLarge(field: "fileSize", max: Double(max / 1024 / 1024))
+            currentError = error
+            logger.error("Photo upload failed - file too large: \(current) bytes")
+            throw error
+        } catch let error as ImageProcessingError {
+            let serviceError = DataServiceError.invalidData("Image processing failed: \(error.localizedDescription)")
+            currentError = serviceError
+            logger.error("Photo upload failed with ImageProcessingError: \(error.localizedDescription)")
+            throw serviceError
         } catch let error as DataServiceError {
             currentError = error
             logger.error("Photo upload failed with DataServiceError: \(error.localizedDescription)")
@@ -238,7 +265,7 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
 
     // MARK: - Get Photo URL
 
-    func getPhotoURL(fileName: String) throws -> String {
+    func getPhotoURL(fileName: String) async throws -> String {
         do {
             return try supabaseManager.getPublicURL(bucket: bucketName, path: fileName)
         } catch {
@@ -246,14 +273,68 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
         }
     }
 
-    // MARK: - Private Helper Methods
+    // MARK: - Additional Upload Methods
 
-    private func prepareImageData(_ image: UIImage, compressionQuality: CGFloat) throws -> Data {
-        // Convert to JPEG with specified compression
-        guard let imageData = image.jpegData(compressionQuality: compressionQuality) else {
-            throw DataServiceError.jsonEncodingFailed("Failed to convert image to JPEG data")
+    /// Upload multiple photos in batch
+    func uploadPhotos(_ images: [UIImage],
+                     compressionQuality: CGFloat = Config.defaultCompressionQuality,
+                     targetSize: CGSize? = nil,
+                     maintainAspectRatio: Bool = true,
+                     progressHandler: ((Int, Int, PhotoUploadProgress?) -> Void)? = nil) async throws -> [PhotoUploadResult] {
+
+        logger.info("Starting batch photo upload for \(images.count) images")
+
+        var results: [PhotoUploadResult] = []
+
+        for (index, image) in images.enumerated() {
+            let result = try await uploadPhoto(
+                image,
+                compressionQuality: compressionQuality,
+                targetSize: targetSize,
+                maintainAspectRatio: maintainAspectRatio
+            ) { progress in
+                progressHandler?(index + 1, images.count, progress)
+            }
+
+            results.append(result)
         }
 
+        logger.info("Batch photo upload completed: \(results.count) photos uploaded")
+        return results
+    }
+
+    /// Generate thumbnail version of uploaded photo
+    func generateThumbnail(from image: UIImage) async throws -> UIImage {
+        return try await Task {
+            try imageProcessor.generateThumbnail(from: image)
+        }.value
+    }
+
+    // MARK: - Private Helper Methods
+
+    private func processImage(_ image: UIImage,
+                            compressionQuality: CGFloat,
+                            targetSize: CGSize?,
+                            maintainAspectRatio: Bool) async throws -> ImageProcessingResult {
+        return try await Task {
+            let finalTargetSize = targetSize ?? CGSize(
+                width: ImageProcessingConfig.standardWidth,
+                height: ImageProcessingConfig.standardHeight
+            )
+
+            return try self.imageProcessor.processImageForUpload(
+                image,
+                targetSize: finalTargetSize,
+                compressionQuality: compressionQuality,
+                maintainAspectRatio: maintainAspectRatio
+            )
+        }.value
+    }
+
+    private func compressImage(_ image: UIImage, quality: CGFloat) throws -> Data {
+        guard let imageData = image.jpegData(compressionQuality: quality) else {
+            throw DataServiceError.jsonEncodingFailed("Failed to convert image to JPEG data")
+        }
         return imageData
     }
 
@@ -262,12 +343,6 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
             let maxSizeMB = Config.maxFileSize / (1024 * 1024)
             throw DataServiceError.valueTooLarge(field: "fileSize", max: Double(maxSizeMB))
         }
-    }
-
-    private func generateFileName(for userId: UUID) -> String {
-        let timestamp = Int(Date().timeIntervalSince1970)
-        let randomId = UUID().uuidString.prefix(8)
-        return "\(userId)/\(timestamp)_\(randomId).jpg"
     }
 
     private func performUpload(data: Data, fileName: String, contentType: String) async throws -> String {
@@ -283,5 +358,8 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
 // MARK: - Singleton Access
 
 extension PhotoService {
-    static let shared = PhotoService()
+    static let shared = PhotoService(
+        supabaseManager: SupabaseManager.shared,
+        imageProcessor: ImageProcessor()
+    )
 }
