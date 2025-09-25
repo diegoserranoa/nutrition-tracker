@@ -19,6 +19,7 @@ struct FoodSelectionView: View {
     @State private var quantity: String = ""
     @State private var selectedUnit: String = ""
     @State private var showingCamera = false
+    @State private var showingSimpleCamera = false
     @State private var capturedImage: UIImage?
 
     var body: some View {
@@ -101,10 +102,21 @@ struct FoodSelectionView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showingCamera = true
-                    }) {
-                        Image(systemName: "camera")
+                    Menu {
+                        Button(action: {
+                            showingCamera = true
+                        }) {
+                            Label("Smart Capture (AI)", systemImage: "brain.head.profile")
+                        }
+
+                        Button(action: {
+                            // Use simple camera for direct search
+                            showingSimpleCamera = true
+                        }) {
+                            Label("Quick Photo Search", systemImage: "camera")
+                        }
+                    } label: {
+                        Image(systemName: "camera.badge.ellipsis")
                             .font(.headline)
                     }
                 }
@@ -129,9 +141,16 @@ struct FoodSelectionView: View {
             }
         }
         .fullScreenCover(isPresented: $showingCamera) {
+            SmartFoodCaptureView(
+                mealType: mealType,
+                selectedDate: selectedDate
+            ) { food, quantity, unit, date in
+                onFoodSelected(food, quantity, unit, date)
+            }
+        }
+        .fullScreenCover(isPresented: $showingSimpleCamera) {
             CameraView(capturedImage: $capturedImage) { image in
                 capturedImage = image
-                // Here we would integrate with FoodImageClassifier
                 handleCapturedImage(image)
             }
         }

@@ -164,7 +164,8 @@ class CameraManager: NSObject, ObservableObject {
             return nil
         }
 
-        // Resize image for optimal processing while maintaining quality
+        // Perform basic sizing for efficient processing
+        // The ImagePreprocessor will handle final ML model formatting
         let targetSize = CGSize(width: 1024, height: 1024)
         return image.resized(to: targetSize)
     }

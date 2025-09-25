@@ -10,12 +10,14 @@ import UIKit
 
 class FoodImageClassifier {
     private let model: VNCoreMLModel
+    private let preprocessor: ImagePreprocessor
 
     init?() {
         do {
             let mlModel = try FoodClassifier(configuration: MLModelConfiguration()).model
             let coreMLModel = try VNCoreMLModel(for: mlModel)
             self.model = coreMLModel
+            self.preprocessor = ImagePreprocessor(config: .foodRecognition)
         } catch {
             print("Failed to load FoodClassifier model: \(error)")
             return nil
@@ -23,10 +25,19 @@ class FoodImageClassifier {
     }
 
     func classify(image: UIImage, completion: @escaping (String?) -> Void) {
-        guard let ciImage = CIImage(image: image) else {
+        print("🔄 Starting food classification for image: \(image.size)")
+
+        // Preprocess the image for optimal ML model input
+        let startTime = CFAbsoluteTimeGetCurrent()
+        guard let processedImage = preprocessor.process(image),
+              let ciImage = CIImage(image: processedImage) else {
+            print("❌ Failed to preprocess image for classification")
             completion(nil)
             return
         }
+
+        let preprocessTime = CFAbsoluteTimeGetCurrent() - startTime
+        print("✅ Image preprocessed in \(String(format: "%.3f", preprocessTime))s: \(processedImage.size)")
 
         let request = VNCoreMLRequest(model: model) { request, error in
             if let error = error {
