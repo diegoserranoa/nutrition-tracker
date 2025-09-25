@@ -528,7 +528,7 @@
               "9.2"
             ],
             "details": "Create text parsing algorithms to identify nutrition facts sections in OCR results. Implement pattern recognition for calories, protein, carbohydrates, fats, and serving size information. Add unit conversion logic for different measurement formats. Create confidence scoring for parsed nutrition data. Handle various nutrition label formats and layouts with robust parsing rules.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -539,7 +539,7 @@
               "9.3"
             ],
             "details": "Build camera capture interface with nutrition label framing guides. Implement real-time OCR preview with detected text overlay. Create processing state indicators and progress feedback. Add image review functionality before OCR processing. Implement intuitive navigation flow from camera to results display.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -614,7 +614,7 @@
     ],
     "metadata": {
       "created": "2025-09-22T23:34:34.370Z",
-      "updated": "2025-09-25T04:59:28.828Z",
+      "updated": "2025-09-25T16:13:23.314Z",
       "description": "Tasks for master context"
     }
   }

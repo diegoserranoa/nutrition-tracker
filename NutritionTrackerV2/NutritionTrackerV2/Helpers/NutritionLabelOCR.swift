@@ -47,7 +47,7 @@ struct OCRConfig {
 }
 
 /// Result of OCR text recognition
-struct OCRResult {
+struct OCRResult: Equatable {
     /// All recognized text observations
     let textObservations: [VNRecognizedTextObservation]
     /// Extracted text strings with confidence scores
@@ -58,6 +58,15 @@ struct OCRResult {
     var hasText: Bool { !recognizedTexts.isEmpty }
     /// Combined text string
     var fullText: String { recognizedTexts.map { $0.text }.joined(separator: "\n") }
+
+    static func == (lhs: OCRResult, rhs: OCRResult) -> Bool {
+        // Compare based on recognized texts and processing time, ignoring VNRecognizedTextObservation
+        return lhs.recognizedTexts.count == rhs.recognizedTexts.count &&
+               lhs.processingTime == rhs.processingTime &&
+               zip(lhs.recognizedTexts, rhs.recognizedTexts).allSatisfy { left, right in
+                   left.text == right.text && left.confidence == right.confidence && left.boundingBox == right.boundingBox
+               }
+    }
 }
 
 /// Errors that can occur during OCR processing

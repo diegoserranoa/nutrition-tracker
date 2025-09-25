@@ -13,17 +13,25 @@ import SwiftUI
 // MARK: - Data Structures
 
 /// Raw OCR extraction result with metadata
-struct OCRExtractionResult {
+struct OCRExtractionResult: Equatable {
     let originalImage: UIImage
     let processedImage: UIImage?
     let ocrResult: OCRResult
     let imageQualityScore: Double
     let extractionTimestamp: Date
     let processingMetrics: OCRProcessingMetrics
+
+    static func == (lhs: OCRExtractionResult, rhs: OCRExtractionResult) -> Bool {
+        // Compare non-image properties for equality
+        return lhs.imageQualityScore == rhs.imageQualityScore &&
+               lhs.extractionTimestamp == rhs.extractionTimestamp &&
+               lhs.ocrResult == rhs.ocrResult &&
+               lhs.processingMetrics == rhs.processingMetrics
+    }
 }
 
 /// Processing metrics for OCR operations
-struct OCRProcessingMetrics {
+struct OCRProcessingMetrics: Equatable {
     let imageValidationTime: TimeInterval
     let preprocessingTime: TimeInterval
     let ocrProcessingTime: TimeInterval
@@ -38,7 +46,7 @@ struct OCRProcessingMetrics {
 }
 
 /// Individual image quality check result
-struct ImageQualityCheck {
+struct ImageQualityCheck: Equatable {
     let checkType: QualityCheckType
     let score: Double
     let passed: Bool
