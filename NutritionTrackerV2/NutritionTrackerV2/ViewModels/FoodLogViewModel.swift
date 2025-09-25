@@ -20,6 +20,7 @@ class FoodLogViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var error: Error?
     @Published var dailySummary: DailyNutritionSummary?
+    @Published var datesWithLogs: Set<String> = []
 
     // UI State
     @Published var showingFoodPicker = false
@@ -58,6 +59,12 @@ class FoodLogViewModel: ObservableObject {
     /// Whether the selected date is today
     var isToday: Bool {
         Calendar.current.isDateInToday(selectedDate)
+    }
+
+    /// Check if a date has logged foods
+    func hasLogsForDate(_ date: Date) -> Bool {
+        let dateString = dateStringForTracking(date)
+        return datesWithLogs.contains(dateString)
     }
 
     // MARK: - Initialization
@@ -235,6 +242,49 @@ class FoodLogViewModel: ObservableObject {
 
     private func updateDailySummary() {
         dailySummary = DailyNutritionSummary.from(logs: self.foodLogs, for: self.selectedDate)
+        updateDatesWithLogs()
+    }
+
+    private func updateDatesWithLogs() {
+        // Update the tracking set when food logs change
+        let dateString = dateStringForTracking(selectedDate)
+        if foodLogs.isEmpty {
+            datesWithLogs.remove(dateString)
+        } else {
+            datesWithLogs.insert(dateString)
+        }
+    }
+
+    private func dateStringForTracking(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    /// Load dates with food logs for the current month (for calendar indicators)
+    func loadDatesWithLogsForMonth(_ date: Date = Date()) async {
+        let calendar = Calendar.current
+        guard let monthStart = calendar.dateInterval(of: .month, for: date)?.start,
+              let monthEnd = calendar.dateInterval(of: .month, for: date)?.end else {
+            return
+        }
+
+        do {
+            let logs = try await foodLogService.getFoodLogsInDateRange(
+                startDate: monthStart,
+                endDate: monthEnd,
+                userId: UUID() // TODO: Replace with actual user ID when auth is implemented
+            )
+
+            // Extract unique dates from the logs
+            let uniqueDates = Set(logs.map { dateStringForTracking($0.loggedAt) })
+
+            await MainActor.run {
+                datesWithLogs.formUnion(uniqueDates)
+            }
+        } catch {
+            logger.error("Failed to load dates with logs: \(error.localizedDescription)")
+        }
     }
 }
 

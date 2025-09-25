@@ -12,6 +12,7 @@ struct FoodLogView: View {
     @State private var showingFoodSelection = false
     @State private var selectedMealForAdding: MealType = .breakfast
     @State private var showingDatePicker = false
+    @State private var isTransitioning = false
 
     var body: some View {
         NavigationView {
@@ -20,24 +21,38 @@ struct FoodLogView: View {
                     // Date Header
                     dateHeaderView
 
-                    // Daily Summary Card
-                    if let summary = viewModel.dailySummary, summary.logCount > 0 {
-                        dailySummaryCard(summary)
-                    }
-
-                    // Meal Sections
-                    LazyVStack(spacing: 12) {
-                        ForEach(viewModel.displayedMealTypes, id: \.self) { mealType in
-                            mealSection(for: mealType)
+                    // Content with transition animations
+                    Group {
+                        // Daily Summary Card
+                        if let summary = viewModel.dailySummary, summary.logCount > 0 {
+                            dailySummaryCard(summary)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                    removal: .opacity.combined(with: .move(edge: .leading))
+                                ))
                         }
+
+                        // Meal Sections
+                        LazyVStack(spacing: 12) {
+                            ForEach(viewModel.displayedMealTypes, id: \.self) { mealType in
+                                mealSection(for: mealType)
+                                    .transition(.asymmetric(
+                                        insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                        removal: .opacity.combined(with: .move(edge: .leading))
+                                    ))
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 100) // Space for floating button
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 100) // Space for floating button
+                    .opacity(isTransitioning ? 0.3 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: isTransitioning)
                 }
             }
             .refreshable {
                 viewModel.refreshFoodLogs()
             }
+// TODO: Add swipe gestures for navigation - temporarily disabled due to build issue
             .navigationTitle("Food Log")
             .navigationBarTitleDisplayMode(.large)
             .overlay(alignment: .bottomTrailing) {
@@ -60,39 +75,131 @@ struct FoodLogView: View {
         }
         .onAppear {
             viewModel.loadFoodLogs()
+            Task {
+                await viewModel.loadDatesWithLogsForMonth()
+            }
         }
     }
 
     // MARK: - Date Header
 
     private var dateHeaderView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(viewModel.selectedDateString)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-
-                if viewModel.isToday {
-                    Text("Today")
-                        .font(.caption)
-                        .foregroundColor(.blue)
+        VStack(spacing: 0) {
+            // Main date navigation
+            HStack {
+                // Previous day button
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.selectDate(Calendar.current.date(byAdding: .day, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate)
+                    }
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.title3)
                         .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                        .frame(width: 32, height: 32)
+                        .background(Color(.systemGray6))
+                        .clipShape(Circle())
                 }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // Date display
+                VStack(spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text(viewModel.selectedDateString)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+
+                        // Visual indicator for dates with logs
+                        if viewModel.hasLogsForDate(viewModel.selectedDate) {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 8, height: 8)
+                        }
+                    }
+
+                    if viewModel.isToday {
+                        Text("Today")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .fontWeight(.medium)
+                    } else {
+                        Text(relativeDateString(for: viewModel.selectedDate))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .onTapGesture {
+                    showingDatePicker = true
+                }
+
+                Spacer()
+
+                // Next day button
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.selectDate(Calendar.current.date(byAdding: .day, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate)
+                    }
+                }) {
+                    Image(systemName: "chevron.right")
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                        .frame(width: 32, height: 32)
+                        .background(Color(.systemGray6))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
             }
+            .padding(.horizontal)
+            .padding(.vertical, 16)
 
-            Spacer()
+            // Quick date navigation
+            HStack(spacing: 12) {
+                QuickDateButton(title: "Today", isSelected: viewModel.isToday) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        viewModel.selectDate(Date())
+                    }
+                }
 
-            Button(action: {
-                showingDatePicker = true
-            }) {
-                Image(systemName: "calendar")
-                    .font(.title2)
+                QuickDateButton(title: "Yesterday", isSelected: Calendar.current.isDateInYesterday(viewModel.selectedDate)) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        viewModel.selectDate(Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date())
+                    }
+                }
+
+                Button(action: {
+                    showingDatePicker = true
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.caption)
+                        Text("Pick Date")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
                     .foregroundColor(.blue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
             }
+            .padding(.horizontal)
+            .padding(.bottom, 12)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 12)
         .background(Color(.systemGroupedBackground))
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Color(.systemGray4)),
+            alignment: .bottom
+        )
     }
 
     // MARK: - Daily Summary Card
@@ -251,32 +358,209 @@ struct FoodLogView: View {
 
     private var datePickerSheet: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                Text("Select Date")
-                    .font(.headline)
-                    .padding(.top)
-
-                DatePicker("Date", selection: $viewModel.selectedDate, displayedComponents: .date)
+            VStack(spacing: 0) {
+                // Enhanced date picker with indicators
+                VStack {
+                    DatePicker(
+                        "Select Date",
+                        selection: $viewModel.selectedDate,
+                        displayedComponents: .date
+                    )
                     .datePickerStyle(.graphical)
-                    .padding()
+                    .onChange(of: viewModel.selectedDate) { newDate in
+                        // Load month data when month changes
+                        Task {
+                            await viewModel.loadDatesWithLogsForMonth(newDate)
+                        }
+                        // Auto-dismiss after selection for better UX
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            showingDatePicker = false
+                        }
+                    }
+
+                    // Visual indicator legend
+                    HStack(spacing: 16) {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 8, height: 8)
+                            Text("Has food logs")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 8, height: 8)
+                            Text("Today")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+                }
+                .padding()
+
+                // Quick date selection buttons
+                VStack(spacing: 12) {
+                    Text("Quick Select")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                        QuickDatePickerButton(title: "Today", date: Date()) {
+                            viewModel.selectDate(Date())
+                            showingDatePicker = false
+                        }
+
+                        QuickDatePickerButton(title: "Yesterday", date: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()) {
+                            viewModel.selectDate(Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date())
+                            showingDatePicker = false
+                        }
+
+                        QuickDatePickerButton(title: "This Week", date: Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()) {
+                            viewModel.selectDate(Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date())
+                            showingDatePicker = false
+                        }
+
+                        QuickDatePickerButton(title: "Last Week", date: Calendar.current.date(byAdding: .weekOfYear, value: -1, to: Date()) ?? Date()) {
+                            viewModel.selectDate(Calendar.current.date(byAdding: .weekOfYear, value: -1, to: Date()) ?? Date())
+                            showingDatePicker = false
+                        }
+                    }
+                }
+                .padding()
 
                 Spacer()
             }
-            .navigationTitle("Change Date")
+            .navigationTitle("Select Date")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        showingDatePicker = false
-                    }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         showingDatePicker = false
                     }
+                    .fontWeight(.semibold)
                 }
             }
         }
+    }
+
+    // MARK: - Helper Methods
+
+    private enum DateNavigationDirection {
+        case previous, next
+    }
+
+    private func navigateToDate(_ direction: DateNavigationDirection) {
+        let calendar = Calendar.current
+        let newDate: Date
+
+        switch direction {
+        case .previous:
+            newDate = calendar.date(byAdding: .day, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        case .next:
+            newDate = calendar.date(byAdding: .day, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        }
+
+        // Show transition state
+        isTransitioning = true
+
+        // Animate the date change
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            viewModel.selectDate(newDate)
+
+            // Hide transition state after a brief delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isTransitioning = false
+                }
+            }
+        }
+    }
+
+    private func relativeDateString(for date: Date) -> String {
+        let calendar = Calendar.current
+        let today = Date()
+
+        if calendar.isDate(date, inSameDayAs: today) {
+            return "Today"
+        } else if calendar.isDateInYesterday(date) {
+            return "Yesterday"
+        } else if calendar.isDateInTomorrow(date) {
+            return "Tomorrow"
+        } else {
+            let daysDifference = calendar.dateComponents([.day], from: today, to: date).day ?? 0
+            if abs(daysDifference) <= 7 {
+                if daysDifference > 0 {
+                    return "\(daysDifference) day\(daysDifference == 1 ? "" : "s") ahead"
+                } else {
+                    return "\(abs(daysDifference)) day\(abs(daysDifference) == 1 ? "" : "s") ago"
+                }
+            } else {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                return formatter.string(from: date)
+            }
+        }
+    }
+}
+
+// MARK: - Helper Views
+
+struct QuickDateButton: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(isSelected ? .white : .blue)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isSelected ? Color.blue : Color(.systemGray6))
+                .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct QuickDatePickerButton: View {
+    let title: String
+    let date: Date
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+
+                Text(formattedDate)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
     }
 }
 

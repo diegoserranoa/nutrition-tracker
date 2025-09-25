@@ -390,7 +390,7 @@
               "7.1"
             ],
             "details": "Implement calendar-based navigation system for viewing historical food logs. Add date picker component allowing users to select any past or future date. Create smooth transitions between dates with loading states. Implement swipe gestures for quick day-to-day navigation. Add visual indicators showing which dates have logged foods. Ensure proper state management when switching between dates.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
