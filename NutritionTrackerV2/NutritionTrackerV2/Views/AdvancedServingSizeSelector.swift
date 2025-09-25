@@ -14,14 +14,17 @@ struct AdvancedServingSizeSelector: View {
     @State private var servingSizePreset: ServingSizePreset?
     @State private var showingCustomUnit = false
     @State private var customUnit: String = ""
+    @State private var selectedDate: Date
+    @State private var includeTime: Bool = false
     @Environment(\.dismiss) private var dismiss
 
-    let onSave: (Food, Double, String) -> Void
+    let onSave: (Food, Double, String, Date) -> Void
 
-    init(food: Food, initialQuantity: String? = nil, initialUnit: String? = nil, onSave: @escaping (Food, Double, String) -> Void) {
+    init(food: Food, initialQuantity: String? = nil, initialUnit: String? = nil, initialDate: Date? = nil, onSave: @escaping (Food, Double, String, Date) -> Void) {
         self.food = food
         self._quantity = State(initialValue: initialQuantity ?? String(food.servingSize))
         self._selectedUnit = State(initialValue: initialUnit ?? food.servingUnit)
+        self._selectedDate = State(initialValue: initialDate ?? Date())
         self.onSave = onSave
     }
 
@@ -55,6 +58,9 @@ struct AdvancedServingSizeSelector: View {
                 // Food Information Section
                 foodInfoSection
 
+                // Date and Time Section
+                dateTimeSection
+
                 // Quantity Input Section
                 quantityInputSection
 
@@ -85,7 +91,8 @@ struct AdvancedServingSizeSelector: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Add") {
-                        onSave(food, quantityValue, selectedUnit.trimmingCharacters(in: .whitespaces))
+                        let finalDate = includeTime ? selectedDate : Calendar.current.startOfDay(for: selectedDate)
+                        onSave(food, quantityValue, selectedUnit.trimmingCharacters(in: .whitespaces), finalDate)
                     }
                     .disabled(!isValidInput)
                     .fontWeight(.semibold)
@@ -121,6 +128,77 @@ struct AdvancedServingSizeSelector: View {
                 }
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    private var dateTimeSection: some View {
+        Section("When did you eat this?") {
+            VStack(spacing: 16) {
+                // Date picker
+                HStack {
+                    Label("Date", systemImage: "calendar")
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+
+                    Spacer()
+
+                    DatePicker(
+                        "",
+                        selection: $selectedDate,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.compact)
+                }
+
+                // Time toggle and picker
+                VStack(spacing: 12) {
+                    Toggle(isOn: $includeTime) {
+                        Label("Include specific time", systemImage: "clock")
+                            .font(.subheadline)
+                    }
+
+                    if includeTime {
+                        HStack {
+                            Label("Time", systemImage: "clock")
+                                .font(.subheadline)
+                                .foregroundColor(.primary)
+
+                            Spacer()
+
+                            DatePicker(
+                                "",
+                                selection: $selectedDate,
+                                displayedComponents: .hourAndMinute
+                            )
+                            .datePickerStyle(.compact)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: includeTime)
+
+                // Quick time buttons when time is enabled
+                if includeTime {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 8) {
+                        ForEach(quickTimeOptions, id: \.description) { timeOption in
+                            Button(timeOption.description) {
+                                let calendar = Calendar.current
+                                let dateComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
+                                if let newDate = calendar.date(bySettingHour: timeOption.hour, minute: timeOption.minute, second: 0, of: calendar.date(from: dateComponents) ?? selectedDate) {
+                                    selectedDate = newDate
+                                }
+                            }
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(6)
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
         }
     }
 
@@ -377,6 +455,19 @@ struct AdvancedServingSizeSelector: View {
         return nutrients
     }
 
+    private var quickTimeOptions: [QuickTimeOption] {
+        [
+            QuickTimeOption(hour: 7, minute: 0, description: "7:00 AM"),
+            QuickTimeOption(hour: 8, minute: 0, description: "8:00 AM"),
+            QuickTimeOption(hour: 12, minute: 0, description: "12:00 PM"),
+            QuickTimeOption(hour: 13, minute: 0, description: "1:00 PM"),
+            QuickTimeOption(hour: 18, minute: 0, description: "6:00 PM"),
+            QuickTimeOption(hour: 19, minute: 0, description: "7:00 PM"),
+            QuickTimeOption(hour: 20, minute: 0, description: "8:00 PM"),
+            QuickTimeOption(hour: 21, minute: 0, description: "9:00 PM")
+        ]
+    }
+
     // MARK: - Helper Methods
 
     private func incrementQuantity() {
@@ -528,6 +619,12 @@ struct MicronutrientInfo {
     let color: Color
 }
 
+struct QuickTimeOption {
+    let hour: Int
+    let minute: Int
+    let description: String
+}
+
 // MARK: - Supporting Views
 
 struct ServingSizePresetButton: View {
@@ -618,8 +715,8 @@ struct MicronutrientCard: View {
 #if DEBUG
 struct AdvancedServingSizeSelector_Previews: PreviewProvider {
     static var previews: some View {
-        AdvancedServingSizeSelector(food: .sampleFoods[0]) { food, quantity, unit in
-            print("Selected: \(food.name), \(quantity) \(unit)")
+        AdvancedServingSizeSelector(food: .sampleFoods[0]) { food, quantity, unit, date in
+            print("Selected: \(food.name), \(quantity) \(unit), \(date)")
         }
     }
 }

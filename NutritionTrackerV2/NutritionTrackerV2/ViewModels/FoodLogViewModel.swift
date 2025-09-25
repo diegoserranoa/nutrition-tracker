@@ -26,11 +26,17 @@ class FoodLogViewModel: ObservableObject {
     @Published var showingFoodPicker = false
     @Published var selectedMealType: MealType = .breakfast
 
+    // Real-time update state
+    @Published var isUpdating = false
+    @Published var lastUpdateTime: Date?
+    @Published var operationFeedback: OperationFeedback?
+
     // MARK: - Private Properties
 
     private let foodLogService: FoodLogService
     private let logger = Logger(subsystem: "com.nutritiontracker.foodlog", category: "FoodLogViewModel")
     private var cancellables = Set<AnyCancellable>()
+    private var updateTimer: AnyCancellable?
 
     // MARK: - Computed Properties
 
@@ -100,7 +106,7 @@ class FoodLogViewModel: ObservableObject {
         }
     }
 
-    /// Add a food log entry
+    /// Add a food log entry with optimistic updates
     /// - Parameters:
     ///   - food: The food item to log
     ///   - quantity: The quantity consumed
@@ -108,51 +114,86 @@ class FoodLogViewModel: ObservableObject {
     ///   - mealType: The meal type
     ///   - loggedAt: Optional specific time (defaults to now)
     func addFoodLog(food: Food, quantity: Double, unit: String, mealType: MealType, loggedAt: Date? = nil) async {
+        let logTime = loggedAt ?? selectedDate
+
+        // Create temporary food log for optimistic update
+        let tempFoodLog = FoodLog.create(
+            userId: UUID(), // TODO: Replace with actual user ID when auth is implemented
+            food: food,
+            quantity: quantity,
+            unit: unit,
+            mealType: mealType,
+            loggedAt: logTime
+        )
+
+        // Optimistic update - add immediately to UI
+        isUpdating = true
+        foodLogs.append(tempFoodLog)
+        updateDailySummary()
+        showOperationFeedback(.adding(food.name))
+
         do {
             logger.info("Adding food log: \(food.name) - \(quantity) \(unit)")
 
-            let logTime = loggedAt ?? selectedDate
-            let foodLog = FoodLog.create(
-                userId: UUID(), // TODO: Replace with actual user ID when auth is implemented
-                food: food,
-                quantity: quantity,
-                unit: unit,
-                mealType: mealType,
-                loggedAt: logTime
-            )
+            let createdLog = try await foodLogService.createFoodLog(tempFoodLog)
 
-            let createdLog = try await foodLogService.createFoodLog(foodLog)
+            // Replace optimistic entry with real one
+            if let index = foodLogs.firstIndex(where: { $0.id == tempFoodLog.id }) {
+                foodLogs[index] = createdLog
+            }
 
-            // Update local state
-            foodLogs.append(createdLog)
             updateDailySummary()
+            lastUpdateTime = Date()
+            showOperationFeedback(.success("Added \(food.name)"))
 
             logger.info("Successfully added food log: \(food.name)")
 
         } catch {
             logger.error("Failed to add food log: \(error.localizedDescription)")
+
+            // Remove optimistic entry on failure
+            foodLogs.removeAll { $0.id == tempFoodLog.id }
+            updateDailySummary()
+            showOperationFeedback(.error("Failed to add \(food.name)"))
             self.error = error
         }
+
+        isUpdating = false
     }
 
-    /// Delete a food log entry
+    /// Delete a food log entry with optimistic updates
     /// - Parameter log: The food log to delete
     func deleteFoodLog(_ log: FoodLog) async {
+        // Store original for rollback
+        let originalLogs = foodLogs
+
+        // Optimistic update - remove immediately from UI
+        isUpdating = true
+        foodLogs.removeAll { $0.id == log.id }
+        updateDailySummary()
+        showOperationFeedback(.deleting(log.displayName))
+
         do {
             logger.info("Deleting food log: \(log.displayName)")
 
             try await foodLogService.deleteFoodLog(id: log.id)
 
-            // Remove from local array
-            foodLogs.removeAll { $0.id == log.id }
-            updateDailySummary()
+            lastUpdateTime = Date()
+            showOperationFeedback(.success("Removed \(log.displayName)"))
 
             logger.info("Successfully deleted food log: \(log.displayName)")
 
         } catch {
             logger.error("Failed to delete food log: \(error.localizedDescription)")
+
+            // Rollback on failure
+            foodLogs = originalLogs
+            updateDailySummary()
+            showOperationFeedback(.error("Failed to remove \(log.displayName)"))
             self.error = error
         }
+
+        isUpdating = false
     }
 
     /// Update an existing food log entry
@@ -190,6 +231,34 @@ class FoodLogViewModel: ObservableObject {
     /// Clear the current error
     func clearError() {
         error = nil
+    }
+
+    /// Show operation feedback to user
+    /// - Parameter feedback: The feedback to show
+    func showOperationFeedback(_ feedback: OperationFeedback) {
+        operationFeedback = feedback
+
+        // Auto-clear success/info feedback after a delay
+        switch feedback {
+        case .success, .adding, .deleting:
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                if self.operationFeedback == feedback {
+                    self.operationFeedback = nil
+                }
+            }
+        case .error:
+            // Error feedback clears after longer delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                if self.operationFeedback == feedback {
+                    self.operationFeedback = nil
+                }
+            }
+        }
+    }
+
+    /// Clear operation feedback
+    func clearOperationFeedback() {
+        operationFeedback = nil
     }
 
     // MARK: - Private Methods
@@ -333,6 +402,45 @@ extension MealType {
             return .indigo
         case .other:
             return .gray
+        }
+    }
+}
+
+// MARK: - Operation Feedback
+
+/// Enum representing different types of operation feedback
+enum OperationFeedback: Equatable {
+    case adding(String)     // "Adding Chicken Breast..."
+    case deleting(String)   // "Removing Chicken Breast..."
+    case success(String)    // "Added Chicken Breast"
+    case error(String)      // "Failed to add Chicken Breast"
+
+    var message: String {
+        switch self {
+        case .adding(let item):
+            return "Adding \(item)..."
+        case .deleting(let item):
+            return "Removing \(item)..."
+        case .success(let message):
+            return message
+        case .error(let message):
+            return message
+        }
+    }
+
+    var isError: Bool {
+        if case .error = self {
+            return true
+        }
+        return false
+    }
+
+    var isLoading: Bool {
+        switch self {
+        case .adding, .deleting:
+            return true
+        case .success, .error:
+            return false
         }
     }
 }

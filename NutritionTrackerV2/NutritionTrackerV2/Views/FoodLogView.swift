@@ -22,6 +22,16 @@ struct FoodLogView: View {
                     // Date Header
                     dateHeaderView
 
+                    // Operation feedback banner
+                    if let feedback = viewModel.operationFeedback {
+                        operationFeedbackBanner(feedback)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .top).combined(with: .opacity),
+                                removal: .move(edge: .top).combined(with: .opacity)
+                            ))
+                            .animation(.easeInOut(duration: 0.3), value: viewModel.operationFeedback)
+                    }
+
                     // Content with transition animations
                     Group {
                         // Daily Summary Card
@@ -283,6 +293,56 @@ struct FoodLogView: View {
         }
     }
 
+    // MARK: - Operation Feedback Banner
+
+    private func operationFeedbackBanner(_ feedback: OperationFeedback) -> some View {
+        HStack(spacing: 12) {
+            // Icon
+            Group {
+                if feedback.isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                } else if feedback.isError {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundColor(.white)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.white)
+                }
+            }
+            .frame(width: 16, height: 16)
+
+            // Message
+            Text(feedback.message)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.white)
+
+            Spacer()
+
+            // Dismiss button for errors
+            if feedback.isError {
+                Button("✕") {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        viewModel.clearOperationFeedback()
+                    }
+                }
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundColor(.white.opacity(0.8))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            feedback.isError ?
+            Color.red.opacity(0.9) :
+            (feedback.isLoading ? Color.blue.opacity(0.9) : Color.green.opacity(0.9))
+        )
+        .cornerRadius(0) // Full width banner
+    }
+
     // MARK: - Meal Sections
 
     private func mealSection(for mealType: MealType) -> some View {
@@ -378,7 +438,7 @@ struct FoodLogView: View {
     // MARK: - Sheets
 
     private var foodSelectionSheet: some View {
-        FoodSelectionView(mealType: selectedMealForAdding) { food, quantity, unit in
+        FoodSelectionView(mealType: selectedMealForAdding, selectedDate: viewModel.selectedDate) { food, quantity, unit, loggedDate in
             // Add the food to the log
             Task { @MainActor in
                 await viewModel.addFoodLog(
@@ -386,7 +446,7 @@ struct FoodLogView: View {
                     quantity: quantity,
                     unit: unit,
                     mealType: selectedMealForAdding,
-                    loggedAt: viewModel.selectedDate
+                    loggedAt: loggedDate
                 )
             }
             showingFoodSelection = false

@@ -9,7 +9,8 @@ import SwiftUI
 
 struct FoodSelectionView: View {
     let mealType: MealType
-    let onFoodSelected: (Food, Double, String) -> Void
+    let selectedDate: Date
+    let onFoodSelected: (Food, Double, String, Date) -> Void
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var foodListViewModel = FoodListViewModel()
@@ -108,9 +109,10 @@ struct FoodSelectionView: View {
                 AdvancedServingSizeSelector(
                     food: food,
                     initialQuantity: quantity,
-                    initialUnit: selectedUnit
-                ) { finalFood, finalQuantity, finalUnit in
-                    onFoodSelected(finalFood, finalQuantity, finalUnit)
+                    initialUnit: selectedUnit,
+                    initialDate: selectedDate
+                ) { finalFood, finalQuantity, finalUnit, finalDate in
+                    onFoodSelected(finalFood, finalQuantity, finalUnit, finalDate)
                     dismiss()
                 }
             }
@@ -183,8 +185,8 @@ struct FoodSelectionRowView: View {
 #if DEBUG
 struct FoodSelectionView_Previews: PreviewProvider {
     static var previews: some View {
-        FoodSelectionView(mealType: .breakfast) { food, quantity, unit in
-            print("Selected: \(food.name), \(quantity) \(unit)")
+        FoodSelectionView(mealType: .breakfast, selectedDate: Date()) { food, quantity, unit, date in
+            print("Selected: \(food.name), \(quantity) \(unit), \(date)")
         }
     }
 }
