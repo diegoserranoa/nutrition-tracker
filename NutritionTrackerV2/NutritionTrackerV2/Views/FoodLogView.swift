@@ -13,6 +13,7 @@ struct FoodLogView: View {
     @State private var selectedMealForAdding: MealType = .breakfast
     @State private var showingDatePicker = false
     @State private var isTransitioning = false
+    @State private var showingDetailedStats = false
 
     var body: some View {
         NavigationView {
@@ -64,6 +65,15 @@ struct FoodLogView: View {
             }
             .sheet(isPresented: $showingDatePicker) {
                 datePickerSheet
+            }
+            .sheet(isPresented: $showingDetailedStats) {
+                if let summary = viewModel.dailySummary {
+                    DailyNutritionStatsView(
+                        summary: summary,
+                        foodLogs: viewModel.foodLogs,
+                        date: viewModel.selectedDate
+                    )
+                }
             }
             .alert("Error", isPresented: .constant(viewModel.error != nil)) {
                 Button("OK") {
@@ -205,26 +215,53 @@ struct FoodLogView: View {
     // MARK: - Daily Summary Card
 
     private func dailySummaryCard(_ summary: DailyNutritionSummary) -> some View {
-        VStack(spacing: 12) {
-            Text("Daily Summary")
-                .font(.headline)
-                .fontWeight(.semibold)
+        Button(action: {
+            showingDetailedStats = true
+        }) {
+            VStack(spacing: 12) {
+                HStack {
+                    Text("Daily Summary")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
 
-            HStack(spacing: 20) {
-                summaryItem("Calories", value: summary.totalCalories, unit: "cal", color: .blue)
-                summaryItem("Protein", value: summary.totalProtein, unit: "g", color: .red)
-                summaryItem("Carbs", value: summary.totalCarbohydrates, unit: "g", color: .orange)
-                summaryItem("Fat", value: summary.totalFat, unit: "g", color: .purple)
+                    Spacer()
+
+                    Image(systemName: "chart.bar.fill")
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+
+                    Text("View Details")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+
+                HStack(spacing: 20) {
+                    summaryItem("Calories", value: summary.totalCalories, unit: "cal", color: .orange)
+                    summaryItem("Protein", value: summary.totalProtein, unit: "g", color: .red)
+                    summaryItem("Carbs", value: summary.totalCarbohydrates, unit: "g", color: .blue)
+                    summaryItem("Fat", value: summary.totalFat, unit: "g", color: .purple)
+                }
+
+                HStack {
+                    Text("\(summary.logCount) item\(summary.logCount == 1 ? "" : "s") logged")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Text("Tap for detailed analysis")
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                        .italic()
+                }
             }
-
-            Text("\(summary.logCount) item\(summary.logCount == 1 ? "" : "s") logged")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .buttonStyle(.plain)
         .padding(.horizontal)
         .padding(.bottom, 16)
     }
