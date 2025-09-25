@@ -36,9 +36,22 @@ struct FoodListView: View {
             ZStack(alignment: .bottomTrailing) {
                 Group {
                     if viewModel.isLoading {
-                        ProgressView("Loading...")
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                            Text("Loading foods...")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                        .animation(.easeInOut(duration: 0.3), value: viewModel.isLoading)
                     } else if let error = viewModel.error {
                         VStack(spacing: 16) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 48))
+                                .foregroundColor(.red)
+                                .symbolEffect(.bounce, value: viewModel.error?.localizedDescription)
+
                             Text("Error loading foods")
                                 .font(.headline)
                                 .foregroundColor(.red)
@@ -49,17 +62,22 @@ struct FoodListView: View {
                                 .multilineTextAlignment(.center)
 
                             Button("Try Again") {
-                                viewModel.clearError()
-                                viewModel.fetchFoods()
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    viewModel.clearError()
+                                    viewModel.fetchFoods()
+                                }
                             }
                             .buttonStyle(.borderedProminent)
                         }
                         .padding()
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .animation(.easeInOut(duration: 0.4), value: viewModel.error != nil)
                     } else if viewModel.foods.isEmpty && !viewModel.searchText.isEmpty {
                         VStack(spacing: 16) {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 48))
                                 .foregroundColor(.gray)
+                                .symbolEffect(.pulse, value: viewModel.searchText)
 
                             Text("No foods found")
                                 .font(.headline)
@@ -70,11 +88,14 @@ struct FoodListView: View {
                                 .foregroundColor(.secondary)
                         }
                         .padding()
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .animation(.easeInOut(duration: 0.3), value: viewModel.foods.isEmpty)
                     } else if viewModel.foods.isEmpty {
                         VStack(spacing: 16) {
                             Image(systemName: "fork.knife.circle")
                                 .font(.system(size: 48))
                                 .foregroundColor(.gray)
+                                .symbolEffect(.bounce.up, value: viewModel.foods.isEmpty)
 
                             Text("No foods yet")
                                 .font(.headline)
@@ -85,6 +106,8 @@ struct FoodListView: View {
                                 .foregroundColor(.secondary)
                         }
                         .padding()
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                        .animation(.easeInOut(duration: 0.4), value: viewModel.foods.isEmpty)
                     } else {
                         List {
                             ForEach(viewModel.filteredFoods) { food in
@@ -131,7 +154,9 @@ struct FoodListView: View {
 
                 // Floating Action Button
                 Button(action: {
-                    showingAddOptions = true
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showingAddOptions = true
+                    }
                 }) {
                     Image(systemName: "plus")
                         .font(.system(size: 24, weight: .semibold))
@@ -140,6 +165,9 @@ struct FoodListView: View {
                         .background(Color.blue)
                         .clipShape(Circle())
                         .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                        .scaleEffect(showingAddOptions ? 0.95 : 1.0)
+                        .rotationEffect(.degrees(showingAddOptions ? 45 : 0))
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showingAddOptions)
                 }
                 .padding()
                 .confirmationDialog("Add Food", isPresented: $showingAddOptions) {

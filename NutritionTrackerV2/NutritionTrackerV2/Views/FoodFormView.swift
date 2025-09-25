@@ -121,10 +121,13 @@ struct FoodFormView: View {
                 Section {
                     Button(action: {
                         Task {
-                            viewModel.onSave = { onSave() }
+                            viewModel.onSave = {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    onSave()
+                                }
+                            }
                             viewModel.onError = { error in
-                                // Error handling will be improved in next todo
-                                print("Save failed: \(error)")
+                                // Error handled by alert
                             }
                             await viewModel.save()
                         }
@@ -133,11 +136,14 @@ struct FoodFormView: View {
                             if viewModel.isLoading {
                                 ProgressView()
                                     .scaleEffect(0.8)
+                                    .transition(.opacity.combined(with: .scale(scale: 0.5)))
                             }
                             Text(prefilledFood != nil ? "Update Food" : "Save Food")
+                                .animation(.easeInOut(duration: 0.2), value: viewModel.isLoading)
                         }
                     }
                     .disabled(!viewModel.isFormValid || viewModel.isLoading)
+                    .animation(.easeInOut(duration: 0.2), value: viewModel.isFormValid)
                 }
             }
             .navigationTitle(prefilledFood != nil ? "Edit Food" : "New Food")

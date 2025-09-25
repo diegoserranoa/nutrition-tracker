@@ -173,7 +173,7 @@ class FoodFormViewModel: ObservableObject {
             let result: Food
             if let editingFood = editingFood {
                 // Update existing food
-                var updatedFood = food
+                let updatedFood = food
                 // Preserve the original ID for updates
                 result = Food(
                     id: editingFood.id,
