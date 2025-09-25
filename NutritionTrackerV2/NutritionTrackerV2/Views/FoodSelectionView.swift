@@ -18,6 +18,8 @@ struct FoodSelectionView: View {
     @State private var showingQuantityEntry = false
     @State private var quantity: String = ""
     @State private var selectedUnit: String = ""
+    @State private var showingCamera = false
+    @State private var capturedImage: UIImage?
 
     var body: some View {
         NavigationView {
@@ -97,6 +99,15 @@ struct FoodSelectionView: View {
                         dismiss()
                     }
                 }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showingCamera = true
+                    }) {
+                        Image(systemName: "camera")
+                            .font(.headline)
+                    }
+                }
             }
             .onAppear {
                 if foodListViewModel.foods.isEmpty && !foodListViewModel.isLoading {
@@ -117,6 +128,13 @@ struct FoodSelectionView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraView(capturedImage: $capturedImage) { image in
+                capturedImage = image
+                // Here we would integrate with FoodImageClassifier
+                handleCapturedImage(image)
+            }
+        }
     }
 
     private var searchBar: some View {
@@ -132,6 +150,30 @@ struct FoodSelectionView: View {
         .background(Color(.systemGray6))
         .cornerRadius(10)
         .padding()
+    }
+
+    // MARK: - Private Methods
+
+    private func handleCapturedImage(_ image: UIImage) {
+        // Initialize the food image classifier
+        guard let classifier = FoodImageClassifier() else {
+            print("Failed to initialize FoodImageClassifier")
+            return
+        }
+
+        // Classify the captured image
+        classifier.classify(image: image) { [weak foodListViewModel] result in
+            DispatchQueue.main.async {
+                if let foodType = result {
+                    print("🍎 Detected food: \(foodType)")
+                    // Filter the food list based on the detected food type
+                    foodListViewModel?.searchText = foodType
+                } else {
+                    print("❓ Could not identify food in the image")
+                    // Could show an alert or message to the user
+                }
+            }
+        }
     }
 }
 
