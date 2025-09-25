@@ -146,10 +146,19 @@ struct FoodListView: View {
                     }
                 }
                 .navigationTitle("Foods")
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        RealtimeConnectionStatusView(realtimeManager: RealtimeManager.shared)
+                    }
+                }
                 .onAppear {
                     if viewModel.foods.isEmpty && !viewModel.isLoading {
                         viewModel.fetchFoods()
                     }
+                    viewModel.startRealtimeUpdates()
+                }
+                .onDisappear {
+                    viewModel.stopRealtimeUpdates()
                 }
 
                 // Floating Action Button

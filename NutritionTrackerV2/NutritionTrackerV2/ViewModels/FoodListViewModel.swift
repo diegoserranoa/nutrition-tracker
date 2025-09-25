@@ -17,6 +17,7 @@ class FoodListViewModel: ObservableObject {
     @Published var searchText = ""
 
     private let foodService: FoodService
+    private let realtimeManager: RealtimeManager
     private let logger = Logger(subsystem: "com.nutritiontracker.foodlist", category: "FoodListViewModel")
     private var cancellables = Set<AnyCancellable>()
 
@@ -33,9 +34,11 @@ class FoodListViewModel: ObservableObject {
         }
     }
 
-    init(foodService: FoodService? = nil) {
+    init(foodService: FoodService? = nil, realtimeManager: RealtimeManager? = nil) {
         self.foodService = foodService ?? FoodService()
+        self.realtimeManager = realtimeManager ?? RealtimeManager.shared
         setupSearchSubscription()
+        setupRealtimeSubscriptions()
     }
 
     private func setupSearchSubscription() {
@@ -50,6 +53,38 @@ class FoodListViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    private func setupRealtimeSubscriptions() {
+        // Subscribe to food events from RealtimeManager
+        realtimeManager.foodEvents
+            .sink { [weak self] eventData in
+                Task { @MainActor in
+                    await self?.handleFoodRealtimeEvent(eventData)
+                }
+            }
+            .store(in: &cancellables)
+
+        logger.info("Set up real-time subscriptions for food events")
+    }
+
+    private func handleFoodRealtimeEvent(_ eventData: RealtimeEventData<Food>) async {
+        logger.info("Received real-time food event: \(eventData.eventType.rawValue) for table \(eventData.tableName)")
+
+        switch eventData.eventType {
+        case .insert:
+            // For now, just refresh the entire list when new foods are added
+            // In a more sophisticated implementation, we would add the specific food
+            await refreshFoodsQuiet()
+
+        case .update:
+            // Refresh the list to get the updated food
+            await refreshFoodsQuiet()
+
+        case .delete:
+            // Refresh the list to remove the deleted food
+            await refreshFoodsQuiet()
+        }
+    }
+
     func fetchFoods() {
         Task {
             await loadFoods()
@@ -62,8 +97,15 @@ class FoodListViewModel: ObservableObject {
         }
     }
 
-    private func loadFoods(forceRefresh: Bool = false) async {
-        isLoading = true
+    private func refreshFoodsQuiet() async {
+        // Refresh foods without showing loading indicator for real-time updates
+        await loadFoods(forceRefresh: true, showLoading: false)
+    }
+
+    private func loadFoods(forceRefresh: Bool = false, showLoading: Bool = true) async {
+        if showLoading {
+            isLoading = true
+        }
         error = nil
 
         do {
@@ -83,7 +125,9 @@ class FoodListViewModel: ObservableObject {
             self.error = error
         }
 
-        isLoading = false
+        if showLoading {
+            isLoading = false
+        }
     }
 
     func deleteFood(_ food: Food) async {
@@ -178,5 +222,15 @@ class FoodListViewModel: ObservableObject {
 
     func clearError() {
         error = nil
+    }
+
+    func startRealtimeUpdates() {
+        Task {
+            await realtimeManager.start()
+        }
+    }
+
+    func stopRealtimeUpdates() {
+        realtimeManager.stop()
     }
 }

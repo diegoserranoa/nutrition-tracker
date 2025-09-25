@@ -34,6 +34,7 @@ class FoodLogViewModel: ObservableObject {
     // MARK: - Private Properties
 
     private let foodLogService: FoodLogService
+    private let realtimeManager: RealtimeManager
     private let logger = Logger(subsystem: "com.nutritiontracker.foodlog", category: "FoodLogViewModel")
     private var cancellables = Set<AnyCancellable>()
     private var updateTimer: AnyCancellable?
@@ -75,9 +76,11 @@ class FoodLogViewModel: ObservableObject {
 
     // MARK: - Initialization
 
-    init(foodLogService: FoodLogService? = nil) {
+    init(foodLogService: FoodLogService? = nil, realtimeManager: RealtimeManager? = nil) {
         self.foodLogService = foodLogService ?? FoodLogService()
+        self.realtimeManager = realtimeManager ?? RealtimeManager.shared
         setupObservers()
+        setupRealtimeSubscriptions()
         loadFoodLogs()
     }
 
@@ -95,6 +98,11 @@ class FoodLogViewModel: ObservableObject {
         Task {
             await fetchFoodLogs(for: selectedDate, forceRefresh: true)
         }
+    }
+
+    /// Quietly refresh food logs without showing loading indicator (for real-time updates)
+    private func refreshFoodLogsQuiet() async {
+        await fetchFoodLogs(for: selectedDate, forceRefresh: true, showLoading: false)
     }
 
     /// Change the selected date and load logs for that date
@@ -277,8 +285,41 @@ class FoodLogViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func fetchFoodLogs(for date: Date, forceRefresh: Bool = false) async {
-        isLoading = true
+    private func setupRealtimeSubscriptions() {
+        // Subscribe to food_logs events for real-time updates
+        realtimeManager.foodLogEvents
+            .sink { [weak self] eventData in
+                Task { @MainActor in
+                    await self?.handleFoodLogRealtimeEvent(eventData)
+                }
+            }
+            .store(in: &cancellables)
+
+        logger.info("Set up real-time subscriptions for food log events")
+    }
+
+    private func handleFoodLogRealtimeEvent(_ eventData: RealtimeEventData<FoodLog>) async {
+        logger.info("Received real-time food log event: \(eventData.eventType.rawValue) for table \(eventData.tableName)")
+
+        switch eventData.eventType {
+        case .insert:
+            // New food log added - refresh data for current date
+            await refreshFoodLogsQuiet()
+
+        case .update:
+            // Food log updated - refresh data for current date
+            await refreshFoodLogsQuiet()
+
+        case .delete:
+            // Food log deleted - refresh data for current date
+            await refreshFoodLogsQuiet()
+        }
+    }
+
+    private func fetchFoodLogs(for date: Date, forceRefresh: Bool = false, showLoading: Bool = true) async {
+        if showLoading {
+            isLoading = true
+        }
         error = nil
 
         do {
@@ -306,7 +347,9 @@ class FoodLogViewModel: ObservableObject {
             self.error = error
         }
 
-        isLoading = false
+        if showLoading {
+            isLoading = false
+        }
     }
 
     private func updateDailySummary() {
@@ -354,6 +397,18 @@ class FoodLogViewModel: ObservableObject {
         } catch {
             logger.error("Failed to load dates with logs: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - Real-time Management
+
+    func startRealtimeUpdates() {
+        Task {
+            await realtimeManager.start()
+        }
+    }
+
+    func stopRealtimeUpdates() {
+        realtimeManager.stop()
     }
 }
 

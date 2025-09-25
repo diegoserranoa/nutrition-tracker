@@ -66,6 +66,17 @@ struct FoodLogView: View {
 // TODO: Add swipe gestures for navigation - temporarily disabled due to build issue
             .navigationTitle("Food Log")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    RealtimeConnectionStatusView(realtimeManager: RealtimeManager.shared)
+                }
+            }
+            .onAppear {
+                viewModel.startRealtimeUpdates()
+            }
+            .onDisappear {
+                viewModel.stopRealtimeUpdates()
+            }
             .overlay(alignment: .bottomTrailing) {
                 // Quick Add Button
                 quickAddButton
