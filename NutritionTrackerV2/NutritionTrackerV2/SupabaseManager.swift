@@ -247,7 +247,7 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
     }
 
     // MARK: - Real-time Subscriptions
-    // TODO: Implement real-time subscriptions with RealtimeV2 API
+    // Real-time subscriptions are managed by RealtimeSubscriptionManager
 
     // MARK: - Private Methods
     nonisolated private func setupAuthListener() {

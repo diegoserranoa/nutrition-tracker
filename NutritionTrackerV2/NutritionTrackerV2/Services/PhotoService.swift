@@ -15,6 +15,7 @@ import OSLog
 protocol SupabaseManagerProtocol {
     var isAuthenticated: Bool { get }
     var currentUser: User? { get }
+    var realtime: RealtimeClient { get }
 
     func uploadFile(bucket: String, path: String, data: Data, contentType: String) async throws -> String
     func getPublicURL(bucket: String, path: String) throws -> String
