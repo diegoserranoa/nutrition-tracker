@@ -105,7 +105,7 @@ struct FoodSelectionView: View {
         }
         .sheet(isPresented: $showingQuantityEntry) {
             if let food = selectedFood {
-                QuantityEntryView(
+                AdvancedServingSizeSelector(
                     food: food,
                     initialQuantity: quantity,
                     initialUnit: selectedUnit
@@ -178,142 +178,7 @@ struct FoodSelectionRowView: View {
     }
 }
 
-struct QuantityEntryView: View {
-    let food: Food
-    @State private var quantity: String
-    @State private var selectedUnit: String
-    @Environment(\.dismiss) private var dismiss
-
-    let onSave: (Food, Double, String) -> Void
-
-    init(food: Food, initialQuantity: String, initialUnit: String, onSave: @escaping (Food, Double, String) -> Void) {
-        self.food = food
-        self._quantity = State(initialValue: initialQuantity)
-        self._selectedUnit = State(initialValue: initialUnit)
-        self.onSave = onSave
-    }
-
-    private var isValidInput: Bool {
-        Double(quantity) != nil && Double(quantity)! > 0 && !selectedUnit.trimmingCharacters(in: .whitespaces).isEmpty
-    }
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(food.name)
-                            .font(.title2)
-                            .fontWeight(.bold)
-
-                        if let brand = food.brand {
-                            Text(brand)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-
-                        HStack {
-                            Text("\(Int(food.calories)) cal per \(food.servingSize.formatted()) \(food.servingUnit)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-
-                Section("Quantity") {
-                    HStack {
-                        TextField("Amount", text: $quantity)
-                            .keyboardType(.decimalPad)
-                            .textFieldStyle(.roundedBorder)
-
-                        TextField("Unit", text: $selectedUnit)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Common units:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
-                            ForEach(commonUnits, id: \.self) { unit in
-                                Button(unit) {
-                                    selectedUnit = unit
-                                }
-                                .buttonStyle(.bordered)
-                                .font(.caption)
-                            }
-                        }
-                    }
-                    .padding(.top, 8)
-                }
-
-                if let quantityValue = Double(quantity), quantityValue > 0 {
-                    Section("Nutrition Preview") {
-                        let multiplier = quantityValue / food.servingSize
-
-                        HStack {
-                            Text("Calories")
-                            Spacer()
-                            Text("\((food.calories * multiplier).formatted(.number.precision(.fractionLength(0...1))))")
-                                .fontWeight(.medium)
-                        }
-
-                        HStack {
-                            Text("Protein")
-                            Spacer()
-                            Text("\((food.protein * multiplier).formatted(.number.precision(.fractionLength(0...1))))g")
-                        }
-
-                        HStack {
-                            Text("Carbs")
-                            Spacer()
-                            Text("\((food.carbohydrates * multiplier).formatted(.number.precision(.fractionLength(0...1))))g")
-                        }
-
-                        HStack {
-                            Text("Fat")
-                            Spacer()
-                            Text("\((food.fat * multiplier).formatted(.number.precision(.fractionLength(0...1))))g")
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Add Food")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Add") {
-                        guard let quantityValue = Double(quantity) else { return }
-                        onSave(food, quantityValue, selectedUnit.trimmingCharacters(in: .whitespaces))
-                    }
-                    .disabled(!isValidInput)
-                    .fontWeight(.semibold)
-                }
-            }
-        }
-    }
-
-    private var commonUnits: [String] {
-        var units = [food.servingUnit]
-        let standardUnits = ["g", "oz", "cup", "tbsp", "tsp", "piece", "slice", "serving"]
-
-        for unit in standardUnits {
-            if !units.contains(where: { $0.lowercased() == unit.lowercased() }) {
-                units.append(unit)
-            }
-        }
-
-        return units
-    }
-}
+// QuantityEntryView has been replaced with AdvancedServingSizeSelector
 
 #if DEBUG
 struct FoodSelectionView_Previews: PreviewProvider {

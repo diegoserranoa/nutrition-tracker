@@ -401,7 +401,7 @@
               "7.1"
             ],
             "details": "Create serving size selector component with multiple unit options (grams, cups, pieces, etc.). Implement real-time nutritional scaling calculations based on selected serving size. Add quantity input with stepper controls and direct text entry. Display calculated nutritional values (calories, macros, micros) updating live as serving size changes. Include common serving size presets for quick selection. Validate inputs and handle edge cases gracefully.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -614,7 +614,7 @@
     ],
     "metadata": {
       "created": "2025-09-22T23:34:34.370Z",
-      "updated": "2025-09-25T00:23:45.794Z",
+      "updated": "2025-09-25T00:42:45.228Z",
       "description": "Tasks for master context"
     }
   }
