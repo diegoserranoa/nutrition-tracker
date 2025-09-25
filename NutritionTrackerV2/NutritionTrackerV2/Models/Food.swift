@@ -175,6 +175,7 @@ enum FoodSource: String, Codable {
     case restaurant = "restaurant"
     case recipe = "recipe"
     case imported = "imported"
+    case ocrScan = "ocr_scan"
 
     var displayName: String {
         switch self {
@@ -185,6 +186,7 @@ enum FoodSource: String, Codable {
         case .restaurant: return "Restaurant Data"
         case .recipe: return "Recipe"
         case .imported: return "Imported"
+        case .ocrScan: return "OCR Scan"
         }
     }
 }

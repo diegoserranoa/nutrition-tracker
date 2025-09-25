@@ -10,6 +10,7 @@ import UIKit
 
 struct NutritionLabelScanView: View {
     let onNutritionExtracted: (NutritionExtractionResult) -> Void
+    let onFoodCreated: ((Food) -> Void)?
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var extractionService = NutritionExtractionService()
@@ -21,6 +22,12 @@ struct NutritionLabelScanView: View {
     @State private var showingImagePicker = false
     @State private var showingImageReview = false
     @State private var showingFullScreenImage = false
+    @State private var showingCorrectionView = false
+
+    init(onNutritionExtracted: @escaping (NutritionExtractionResult) -> Void, onFoodCreated: ((Food) -> Void)? = nil) {
+        self.onNutritionExtracted = onNutritionExtracted
+        self.onFoodCreated = onFoodCreated
+    }
 
     // MARK: - Scanning Stages
 
@@ -108,6 +115,20 @@ struct NutritionLabelScanView: View {
         .fullScreenCover(isPresented: $showingFullScreenImage) {
             if let image = capturedImage {
                 FullScreenImageView(image: image, isPresented: $showingFullScreenImage)
+            }
+        }
+        .sheet(isPresented: $showingCorrectionView) {
+            if let result = extractionService.lastResult {
+                OCRNutritionCorrectionView(
+                    extractionResult: result,
+                    onSave: { food in
+                        onFoodCreated?(food)
+                        dismiss()
+                    },
+                    onCancel: {
+                        showingCorrectionView = false
+                    }
+                )
             }
         }
         .onChange(of: extractionService.isProcessing) { isProcessing in
@@ -413,28 +434,38 @@ struct NutritionLabelScanView: View {
                 }
 
                 // Action buttons
-                HStack(spacing: 16) {
-                    Button("Scan Another") {
-                        resetScanner()
-                    }
-                    .font(.subheadline)
-                    .foregroundColor(.blue)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(10)
+                VStack(spacing: 12) {
+                    HStack(spacing: 16) {
+                        Button("Scan Another") {
+                            resetScanner()
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
 
-                    if result.hasUsableData {
-                        Button("Use This Data") {
-                            onNutritionExtracted(result)
-                            dismiss()
+                        Button("Review & Edit") {
+                            showingCorrectionView = true
                         }
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(result.successRating.color)
+                        .background(Color.blue)
                         .cornerRadius(10)
+                    }
+
+                    if result.hasUsableData {
+                        Button("Use Raw Data") {
+                            onNutritionExtracted(result)
+                            dismiss()
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
                     }
                 }
             }
@@ -1127,9 +1158,14 @@ struct FullScreenImageView: View {
 #if DEBUG
 struct NutritionLabelScanView_Previews: PreviewProvider {
     static var previews: some View {
-        NutritionLabelScanView { result in
-            print("Nutrition extracted: \(result.summary)")
-        }
+        NutritionLabelScanView(
+            onNutritionExtracted: { result in
+                print("Nutrition extracted: \(result.summary)")
+            },
+            onFoodCreated: { food in
+                print("Food created: \(food.name)")
+            }
+        )
     }
 }
 #endif
