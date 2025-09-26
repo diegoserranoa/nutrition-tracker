@@ -22,6 +22,7 @@ struct FoodLog: Codable, Identifiable, Hashable, Syncable, SoftDeletable, Timest
     // Meal information
     let mealType: MealType
     let loggedAt: Date // When the food was consumed
+    let date: Date? // Legacy date field for backward compatibility
     let createdAt: Date // When the log entry was created
     let updatedAt: Date
 
@@ -46,6 +47,7 @@ struct FoodLog: Codable, Identifiable, Hashable, Syncable, SoftDeletable, Timest
         case totalGrams = "total_grams"
         case mealType = "meal_type"
         case loggedAt = "logged_at"
+        case date
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case notes
@@ -185,6 +187,10 @@ extension FoodLog {
         notes: String? = nil
     ) -> FoodLog {
         let now = Date()
+        // Set date to the same date as loggedAt for backward compatibility
+        let calendar = Calendar.current
+        let dateOnly = calendar.startOfDay(for: loggedAt)
+
         return FoodLog(
             id: UUID(),
             userId: userId,
@@ -194,6 +200,7 @@ extension FoodLog {
             totalGrams: totalGrams,
             mealType: mealType,
             loggedAt: loggedAt,
+            date: dateOnly,
             createdAt: now,
             updatedAt: now,
             notes: notes,
@@ -231,6 +238,7 @@ extension FoodLog {
             totalGrams: totalGrams ?? self.totalGrams,
             mealType: mealType ?? self.mealType,
             loggedAt: self.loggedAt,
+            date: self.date,
             createdAt: self.createdAt,
             updatedAt: Date(),
             notes: notes ?? self.notes,
@@ -254,6 +262,7 @@ extension FoodLog {
             totalGrams: self.totalGrams,
             mealType: self.mealType,
             loggedAt: self.loggedAt,
+            date: self.date,
             createdAt: self.createdAt,
             updatedAt: Date(),
             notes: self.notes,
@@ -369,6 +378,7 @@ extension FoodLog {
             totalGrams: 118,
             mealType: .breakfast,
             loggedAt: Date(),
+            date: Calendar.current.startOfDay(for: Date()),
             createdAt: Date(),
             updatedAt: Date(),
             notes: nil,
@@ -387,6 +397,7 @@ extension FoodLog {
             totalGrams: 150,
             mealType: .lunch,
             loggedAt: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
+            date: Calendar.current.startOfDay(for: Date()),
             createdAt: Date(),
             updatedAt: Date(),
             notes: "Grilled with herbs",

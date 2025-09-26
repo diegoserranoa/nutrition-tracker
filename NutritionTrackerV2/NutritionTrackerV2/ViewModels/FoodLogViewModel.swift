@@ -35,6 +35,7 @@ class FoodLogViewModel: ObservableObject {
 
     private let foodLogService: FoodLogService
     private let realtimeManager: RealtimeManager
+    private let supabaseManager: SupabaseManager
     private let logger = Logger(subsystem: "com.nutritiontracker.foodlog", category: "FoodLogViewModel")
     private var cancellables = Set<AnyCancellable>()
     private var updateTimer: AnyCancellable?
@@ -76,9 +77,10 @@ class FoodLogViewModel: ObservableObject {
 
     // MARK: - Initialization
 
-    init(foodLogService: FoodLogService? = nil, realtimeManager: RealtimeManager? = nil) {
+    init(foodLogService: FoodLogService? = nil, realtimeManager: RealtimeManager? = nil, supabaseManager: SupabaseManager? = nil) {
         self.foodLogService = foodLogService ?? FoodLogService()
         self.realtimeManager = realtimeManager ?? RealtimeManager.shared
+        self.supabaseManager = supabaseManager ?? SupabaseManager.shared
         setupObservers()
         setupRealtimeSubscriptions()
         loadFoodLogs()
@@ -122,11 +124,18 @@ class FoodLogViewModel: ObservableObject {
     ///   - mealType: The meal type
     ///   - loggedAt: Optional specific time (defaults to now)
     func addFoodLog(food: Food, quantity: Double, unit: String, mealType: MealType, loggedAt: Date? = nil) async {
+        // Get the current authenticated user
+        guard let currentUser = await supabaseManager.currentUser else {
+            logger.error("Cannot add food log: No authenticated user")
+            showOperationFeedback(.error("Please log in to add food logs"))
+            return
+        }
+
         let logTime = loggedAt ?? selectedDate
 
         // Create temporary food log for optimistic update
         let tempFoodLog = FoodLog.create(
-            userId: UUID(), // TODO: Replace with actual user ID when auth is implemented
+            userId: currentUser.id,
             food: food,
             quantity: quantity,
             unit: unit,
@@ -145,9 +154,11 @@ class FoodLogViewModel: ObservableObject {
 
             let createdLog = try await foodLogService.createFoodLog(tempFoodLog)
 
-            // Replace optimistic entry with real one
+            // Replace optimistic entry with real one, but preserve the food object
             if let index = foodLogs.firstIndex(where: { $0.id == tempFoodLog.id }) {
-                foodLogs[index] = createdLog
+                var updatedLog = createdLog
+                updatedLog.food = food // Preserve the food object from the original
+                foodLogs[index] = updatedLog
             }
 
             updateDailySummary()
@@ -322,6 +333,14 @@ class FoodLogViewModel: ObservableObject {
         }
         error = nil
 
+        // Get the current authenticated user
+        guard let currentUser = await supabaseManager.currentUser else {
+            logger.error("Cannot fetch food logs: No authenticated user")
+            isLoading = false
+            error = SupabaseError.userNotAuthenticated
+            return
+        }
+
         do {
             logger.info("Fetching food logs for date: \(date)")
 
@@ -333,7 +352,7 @@ class FoodLogViewModel: ObservableObject {
             let logs = try await foodLogService.getFoodLogsInDateRange(
                 startDate: startOfDay,
                 endDate: endOfDay,
-                userId: UUID() // TODO: Replace with actual user ID when auth is implemented
+                userId: currentUser.id
             )
 
             // Update UI on main thread
@@ -375,6 +394,12 @@ class FoodLogViewModel: ObservableObject {
 
     /// Load dates with food logs for the current month (for calendar indicators)
     func loadDatesWithLogsForMonth(_ date: Date = Date()) async {
+        // Get the current authenticated user
+        guard let currentUser = await supabaseManager.currentUser else {
+            logger.error("Cannot load month data: No authenticated user")
+            return
+        }
+
         let calendar = Calendar.current
         guard let monthStart = calendar.dateInterval(of: .month, for: date)?.start,
               let monthEnd = calendar.dateInterval(of: .month, for: date)?.end else {
@@ -385,7 +410,7 @@ class FoodLogViewModel: ObservableObject {
             let logs = try await foodLogService.getFoodLogsInDateRange(
                 startDate: monthStart,
                 endDate: monthEnd,
-                userId: UUID() // TODO: Replace with actual user ID when auth is implemented
+                userId: currentUser.id
             )
 
             // Extract unique dates from the logs

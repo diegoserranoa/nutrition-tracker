@@ -117,8 +117,11 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
                 throw DataServiceError.missingResponseData
             }
 
+            // Load associated food data for the created log
+            let logWithFood = try await loadFoodDataForLogs([createdFoodLog])
+
             logger.info("Successfully created food log with ID: \\(createdFoodLog.id)")
-            return createdFoodLog
+            return logWithFood.first ?? createdFoodLog
 
         } catch let error as DataServiceError {
             currentError = error
@@ -162,8 +165,11 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
                 throw DataServiceError.notFound("FoodLog with ID \\(foodLog.id)")
             }
 
+            // Load associated food data for the updated log
+            let logWithFood = try await loadFoodDataForLogs([updatedFoodLog])
+
             logger.info("Successfully updated food log with ID: \\(updatedFoodLog.id)")
-            return updatedFoodLog
+            return logWithFood.first ?? updatedFoodLog
 
         } catch let error as DataServiceError {
             currentError = error
@@ -253,7 +259,10 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
                 .value
 
             logger.info("Successfully found \\(response.count) food logs for date")
-            return response
+
+            // Load associated food data for each log
+            let logsWithFood = try await loadFoodDataForLogs(response)
+            return logsWithFood
 
         } catch let error as DataServiceError {
             currentError = error
@@ -287,7 +296,10 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
                 .value
 
             logger.info("Successfully found \\(response.count) food logs in date range")
-            return response
+
+            // Load associated food data for each log
+            let logsWithFood = try await loadFoodDataForLogs(response)
+            return logsWithFood
 
         } catch let error as DataServiceError {
             currentError = error
@@ -321,7 +333,10 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
                 .value
 
             logger.info("Successfully found \\(response.count) food logs for meal type")
-            return response
+
+            // Load associated food data for each log
+            let logsWithFood = try await loadFoodDataForLogs(response)
+            return logsWithFood
 
         } catch let error as DataServiceError {
             currentError = error
@@ -430,6 +445,8 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
 
     private func foodLogToAnyJSONDictionary(_ foodLog: FoodLog) throws -> [String: AnyJSON] {
         let formatter = ISO8601DateFormatter()
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
 
         return [
             "id": AnyJSON.string(foodLog.id.uuidString),
@@ -440,6 +457,7 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
             "total_grams": try doubleToAnyJSON(foodLog.totalGrams),
             "meal_type": AnyJSON.string(foodLog.mealType.rawValue),
             "logged_at": AnyJSON.string(formatter.string(from: foodLog.loggedAt)),
+            "date": foodLog.date.map { AnyJSON.string(dateFormatter.string(from: $0)) } ?? AnyJSON.null,
             "created_at": AnyJSON.string(formatter.string(from: foodLog.createdAt)),
             "updated_at": AnyJSON.string(formatter.string(from: foodLog.updatedAt)),
             "notes": foodLog.notes.map(AnyJSON.string) ?? AnyJSON.null,
@@ -463,6 +481,33 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
     private func formatDateForSupabase(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()
         return formatter.string(from: date)
+    }
+
+    /// Load associated food data for a list of food logs
+    /// - Parameter logs: Array of FoodLog instances to populate with food data
+    /// - Returns: Array of FoodLog instances with food data populated
+    private func loadFoodDataForLogs(_ logs: [FoodLog]) async throws -> [FoodLog] {
+        var logsWithFood: [FoodLog] = []
+
+        for var log in logs {
+            do {
+                if let food = try await foodService.getFoodById(log.foodId) {
+                    log.food = food
+                    logsWithFood.append(log)
+                } else {
+                    logger.warning("Could not find food with ID: \\(log.foodId) for log: \\(log.id)")
+                    // Still include the log without food data so it's visible
+                    logsWithFood.append(log)
+                }
+            } catch {
+                logger.error("Failed to load food data for log \\(log.id): \\(error.localizedDescription)")
+                // Still include the log without food data so it's visible
+                logsWithFood.append(log)
+            }
+        }
+
+        logger.info("Successfully loaded food data for \\(logsWithFood.filter { $0.food != nil }.count)/\\(logs.count) food logs")
+        return logsWithFood
     }
 
     // MARK: - Serving Size Calculations

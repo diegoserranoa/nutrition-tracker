@@ -302,12 +302,12 @@ class FoodService: ObservableObject, FoodServiceProtocol {
         }
 
         dict["name"] = AnyJSON.string(food.name)
-        // dict["brand"] = food.brand.map(AnyJSON.string) ?? AnyJSON.null // TODO: Add brand column to Supabase schema
-        // dict["barcode"] = food.barcode.map(AnyJSON.string) ?? AnyJSON.null // TODO: Add barcode column to Supabase schema
-        // dict["description"] = food.description.map(AnyJSON.string) ?? AnyJSON.null // TODO: Add description column to Supabase schema
+        dict["brand"] = food.brand.map(AnyJSON.string) ?? AnyJSON.null
+        dict["barcode"] = food.barcode.map(AnyJSON.string) ?? AnyJSON.null
+        dict["description"] = food.description.map(AnyJSON.string) ?? AnyJSON.null
         dict["serving_size"] = try AnyJSON(food.servingSize)
         dict["measurement_unit"] = AnyJSON.string(food.servingUnit) // Maps to measurement_unit in DB
-        // dict["serving_size_grams"] = try doubleToAnyJSON(food.servingSizeGrams) // TODO: Add serving_size_grams column to Supabase schema
+        dict["serving_size_grams"] = try doubleToAnyJSON(food.servingSizeGrams)
         dict["calories"] = try AnyJSON(food.calories)
         dict["protein"] = try AnyJSON(food.protein)
         dict["total_carbohydrate"] = try AnyJSON(food.carbohydrates) // Maps to total_carbohydrate in DB
@@ -315,8 +315,8 @@ class FoodService: ObservableObject, FoodServiceProtocol {
         dict["dietary_fiber"] = try doubleToAnyJSON(food.fiber) // Maps to dietary_fiber in DB
         dict["total_sugars"] = try doubleToAnyJSON(food.sugar) // Maps to total_sugars in DB
         dict["saturated_fat"] = try doubleToAnyJSON(food.saturatedFat)
-        // dict["unsaturated_fat"] = try doubleToAnyJSON(food.unsaturatedFat) // TODO: Add unsaturated_fat column to Supabase schema
-        // dict["trans_fat"] = try doubleToAnyJSON(food.transFat) // TODO: Add trans_fat column to Supabase schema
+        dict["unsaturated_fat"] = try doubleToAnyJSON(food.unsaturatedFat)
+        dict["trans_fat"] = try doubleToAnyJSON(food.transFat)
         dict["sodium"] = try doubleToAnyJSON(food.sodium)
         dict["cholesterol"] = try doubleToAnyJSON(food.cholesterol)
         dict["potassium"] = try doubleToAnyJSON(food.potassium)
@@ -336,12 +336,12 @@ class FoodService: ObservableObject, FoodServiceProtocol {
         dict["magnesium"] = try doubleToAnyJSON(food.magnesium)
         dict["phosphorus"] = try doubleToAnyJSON(food.phosphorus)
         dict["zinc"] = try doubleToAnyJSON(food.zinc)
-        // dict["category"] = food.category.map { AnyJSON.string($0.rawValue) } ?? AnyJSON.null // TODO: Add category column to Supabase schema
-        // dict["is_verified"] = AnyJSON.bool(food.isVerified) // TODO: Add is_verified column to Supabase schema
-        // dict["source"] = AnyJSON.string(food.source.rawValue) // TODO: Add source column to Supabase schema
+        dict["category"] = food.category.map { AnyJSON.string($0.rawValue) } ?? AnyJSON.null
+        dict["is_verified"] = AnyJSON.bool(food.isVerified)
+        dict["source"] = AnyJSON.string(food.source.rawValue)
         dict["created_at"] = AnyJSON.string(formatter.string(from: food.createdAt))
         dict["updated_at"] = AnyJSON.string(formatter.string(from: now))
-        // dict["created_by"] = food.createdBy.map { AnyJSON.string($0.uuidString) } ?? AnyJSON.null // TODO: Add created_by column to Supabase schema
+        dict["created_by"] = food.createdBy.map { AnyJSON.string($0.uuidString) } ?? AnyJSON.null
 
         return dict
     }
