@@ -339,19 +339,19 @@ extension NutritionExtractionResult {
         let nutrition = parsedNutrition
 
         // Extract serving information
-        let servingSize = nutrition.servingInfo?.size ?? 1.0
-        let servingUnit = nutrition.servingInfo?.unit ?? "serving"
+        let _ = nutrition.servingInfo?.size ?? 1.0
+        let _ = nutrition.servingInfo?.unit ?? "serving"
 
         // Extract macronutrients
-        let calories = nutrition.calories?.value ?? 0.0
-        let protein = nutrition.macronutrients.protein?.value ?? 0.0
-        let carbs = nutrition.macronutrients.carbohydrates?.value ?? 0.0
-        let fat = nutrition.macronutrients.fat?.value ?? 0.0
+        let _ = nutrition.calories?.value ?? 0.0
+        let _ = nutrition.macronutrients.protein?.value ?? 0.0
+        let _ = nutrition.macronutrients.carbohydrates?.value ?? 0.0
+        let _ = nutrition.macronutrients.fat?.value ?? 0.0
 
         // Extract micronutrients
-        let sodium = nutrition.micronutrients.sodium?.value
-        let calcium = nutrition.micronutrients.calcium?.value
-        let iron = nutrition.micronutrients.iron?.value
+        let _ = nutrition.micronutrients.sodium?.value
+        let _ = nutrition.micronutrients.calcium?.value
+        let _ = nutrition.micronutrients.iron?.value
 
         // Note: This is a simplified Food creation - would need to match
         // the actual Food model structure from the codebase

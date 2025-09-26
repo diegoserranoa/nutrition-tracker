@@ -26,8 +26,20 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
     // MARK: - Properties
     private let supabaseClient: SupabaseClient
 
-    @Published var isAuthenticated = false
-    @Published var currentUser: User?
+    @Published internal var _isAuthenticated = false
+    @Published internal var _currentUser: User?
+
+    nonisolated var isAuthenticated: Bool {
+        get async {
+            await MainActor.run { _isAuthenticated }
+        }
+    }
+
+    nonisolated var currentUser: User? {
+        get async {
+            await MainActor.run { _currentUser }
+        }
+    }
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var connectionStatus: ConnectionStatus = .disconnected
@@ -75,12 +87,12 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
         return supabaseClient.from(table)
     }
 
-    var storage: SupabaseStorageClient {
+    nonisolated var storage: SupabaseStorageClient {
         return supabaseClient.storage
     }
 
-    var realtime: RealtimeClient {
-        return supabaseClient.realtime
+    nonisolated var realtime: RealtimeClientV2 {
+        return supabaseClient.realtimeV2
     }
 
     // MARK: - Authentication Methods
@@ -120,8 +132,8 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
 
         do {
             try await auth.signOut()
-            currentUser = nil
-            isAuthenticated = false
+            _currentUser = nil
+            _isAuthenticated = false
         } catch {
             errorMessage = error.localizedDescription
             throw error
@@ -132,7 +144,7 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
 
     // MARK: - User Profile Methods
     func createUserProfile(username: String, customKey: String? = nil) async throws {
-        guard let user = currentUser else {
+        guard let user = _currentUser else {
             throw SupabaseError.userNotAuthenticated
         }
 
@@ -148,7 +160,7 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
     }
 
     func getUserProfile() async throws -> UserProfile? {
-        guard let user = currentUser else {
+        guard let user = _currentUser else {
             throw SupabaseError.userNotAuthenticated
         }
 
@@ -171,7 +183,7 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
     }
 
     // MARK: - Storage Helper Methods
-    func uploadFile(bucket: String, path: String, data: Data, contentType: String) async throws -> String {
+    nonisolated func uploadFile(bucket: String, path: String, data: Data, contentType: String) async throws -> String {
         try await storage
             .from(bucket)
             .upload(path, data: data, options: FileOptions(contentType: contentType))
@@ -182,14 +194,14 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
             .absoluteString
     }
 
-    func getPublicURL(bucket: String, path: String) throws -> String {
+    nonisolated func getPublicURL(bucket: String, path: String) throws -> String {
         return try storage
             .from(bucket)
             .getPublicURL(path: path)
             .absoluteString
     }
 
-    func deleteFile(bucket: String, fileName: String) async throws {
+    nonisolated func deleteFile(bucket: String, fileName: String) async throws {
         try await storage
             .from(bucket)
             .remove(paths: [fileName])
@@ -231,10 +243,10 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
         }
 
         // Test authentication status
-        results.authenticationWorking = isAuthenticated
+        results.authenticationWorking = _isAuthenticated
 
         // Test storage (if authenticated)
-        if isAuthenticated {
+        if _isAuthenticated {
             do {
                 let _ = try storage.from("test").getPublicURL(path: "test.txt")
                 results.storageConnected = true
@@ -261,13 +273,13 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
     private func handleAuthStateChange(event: AuthChangeEvent, session: Session?) async {
         switch event {
         case .signedIn:
-            currentUser = session?.user
-            isAuthenticated = true
+            _currentUser = session?.user
+            _isAuthenticated = true
         case .signedOut:
-            currentUser = nil
-            isAuthenticated = false
+            _currentUser = nil
+            _isAuthenticated = false
         case .tokenRefreshed:
-            currentUser = session?.user
+            _currentUser = session?.user
         default:
             break
         }
@@ -275,11 +287,11 @@ class SupabaseManager: ObservableObject, SupabaseManagerProtocol {
 
     private func checkAuthState() async {
         do {
-            currentUser = try await auth.user()
-            isAuthenticated = currentUser != nil
+            _currentUser = try await auth.user()
+            _isAuthenticated = _currentUser != nil
         } catch {
-            currentUser = nil
-            isAuthenticated = false
+            _currentUser = nil
+            _isAuthenticated = false
         }
     }
 }

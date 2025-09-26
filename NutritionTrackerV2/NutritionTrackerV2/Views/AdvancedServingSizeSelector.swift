@@ -229,7 +229,7 @@ struct AdvancedServingSizeSelector: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.title3)
                         .multilineTextAlignment(.center)
-                        .onChange(of: quantity) { newValue in
+                        .onChange(of: quantity) { oldValue, newValue in
                             validateAndFormatQuantity(newValue)
                         }
 

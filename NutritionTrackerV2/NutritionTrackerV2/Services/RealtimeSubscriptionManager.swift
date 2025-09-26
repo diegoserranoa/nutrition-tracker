@@ -87,7 +87,7 @@ class RealtimeSubscriptionManager: ObservableObject {
     @Published var lastError: Error?
 
     // Subscription management - simplified approach
-    private var activeChannels: [String: RealtimeChannel] = [:]
+    private var activeChannels: [String: RealtimeChannelV2] = [:]
     private var subscriptionConfigs: [String: SubscriptionConfig] = [:]
 
     // Publishers for different table events
@@ -122,7 +122,7 @@ class RealtimeSubscriptionManager: ObservableObject {
             try await configureBasicSubscriptions()
 
             // Connect to realtime
-            connectToRealtime()
+            await connectToRealtime()
 
             subscriptionStatus = .connected
             isConnected = true
@@ -171,19 +171,20 @@ class RealtimeSubscriptionManager: ObservableObject {
 
         let channel = supabaseManager.realtime.channel(channelName)
 
-        // Set up basic database changes listener
-        // Using simplified approach compatible with current Supabase SDK
-        let filter = ChannelFilter(event: "postgres_changes", schema: schema, table: tableName, filter: nil)
-        await channel.on("postgres_changes", filter: filter) { [weak self] message in
-            Task { @MainActor in
-                await self?.handleDatabaseChange(message, tableName: tableName)
+        // Subscribe to the channel first
+        try await channel.subscribeWithError()
+
+        // Set up database changes listener using async task
+        // Using RealtimeChannelV2 API
+        Task { [weak self] in
+            for await action in channel.postgresChange(AnyAction.self, table: tableName) {
+                Task { @MainActor in
+                    await self?.handleDatabaseChange(action, tableName: tableName)
+                }
             }
         }
 
-        // Subscribe to the channel
-        await channel.subscribe()
-
-        let config = SubscriptionConfig(tableName: tableName, filter: filter.filter, schema: schema)
+        let config = SubscriptionConfig(tableName: tableName, filter: nil, schema: schema)
         activeChannels[channelName] = channel
         subscriptionConfigs[channelName] = config
 
@@ -207,13 +208,13 @@ class RealtimeSubscriptionManager: ObservableObject {
         try await subscribeToTable(tableName: "food_logs")
     }
 
-    private func connectToRealtime() {
+    private func connectToRealtime() async {
         // Connect to realtime
-        supabaseManager.realtime.connect()
+        await supabaseManager.realtime.connect()
         logger.info("Connected to Supabase realtime")
     }
 
-    private func handleDatabaseChange(_ message: RealtimeMessage, tableName: String) async {
+    private func handleDatabaseChange(_ action: AnyAction, tableName: String) async {
         logger.debug("Received database change for table: \(tableName)")
 
         // For now, create a simple notification that something changed

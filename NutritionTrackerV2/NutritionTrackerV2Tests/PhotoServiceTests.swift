@@ -34,7 +34,7 @@ final class PhotoServiceTests: XCTestCase {
     func testUploadPhoto_Success() async throws {
         // Given
         let testImage = createTestImage()
-        mockSupabaseManager.isAuthenticated = true
+        mockSupabaseManager.setAuthenticated(true)
         mockSupabaseManager.mockUploadSuccess = true
 
         // When
@@ -67,7 +67,7 @@ final class PhotoServiceTests: XCTestCase {
     func testUploadPhoto_InvalidImage() async {
         // Given
         let invalidImage = UIImage() // Empty image
-        mockSupabaseManager.isAuthenticated = true
+        mockSupabaseManager.setAuthenticated(true)
 
         // When & Then
         do {
@@ -83,7 +83,7 @@ final class PhotoServiceTests: XCTestCase {
     func testUploadPhoto_ProgressTracking() async throws {
         // Given
         let testImage = createTestImage()
-        mockSupabaseManager.isAuthenticated = true
+        mockSupabaseManager.setAuthenticated(true)
         mockSupabaseManager.mockUploadSuccess = true
 
         var progressUpdates: [PhotoUploadProgress] = []
@@ -137,7 +137,7 @@ final class PhotoServiceTests: XCTestCase {
     func testDeletePhoto_Success() async throws {
         // Given
         let fileName = "test-photo.jpg"
-        mockSupabaseManager.isAuthenticated = true
+        mockSupabaseManager.setAuthenticated(true)
         mockSupabaseManager.mockDeleteSuccess = true
 
         // When
@@ -273,7 +273,7 @@ final class PhotoServiceTests: XCTestCase {
             createTestImage(size: CGSize(width: 300, height: 300))
         ]
 
-        mockSupabaseManager.isAuthenticated = true
+        mockSupabaseManager.setAuthenticated(true)
         mockSupabaseManager.mockUploadSuccess = true
 
         // When
@@ -351,10 +351,28 @@ extension User {
 // MARK: - Mock Classes
 
 class MockSupabaseManager: SupabaseManagerProtocol {
-    var isAuthenticated = false
+    private var _isAuthenticated = false
+    private var _currentUser: User?
+
+    var isAuthenticated: Bool {
+        get async { _isAuthenticated }
+    }
+
     var currentUser: User? {
-        // For testing purposes, return a non-nil value when authenticated
-        return isAuthenticated ? User.mockUser : nil
+        get async {
+            // For testing purposes, return a non-nil value when authenticated
+            return _isAuthenticated ? User.mockUser : nil
+        }
+    }
+
+    var realtime: RealtimeClientV2 {
+        // For testing, we can return a placeholder - PhotoService doesn't currently use realtime
+        fatalError("Realtime not implemented in mock - PhotoService doesn't use it")
+    }
+
+    // For test setup
+    func setAuthenticated(_ value: Bool) {
+        _isAuthenticated = value
     }
     var mockUploadSuccess = false
     var mockDeleteSuccess = false

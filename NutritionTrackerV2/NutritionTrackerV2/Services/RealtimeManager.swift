@@ -179,26 +179,21 @@ class RealtimeManager: ObservableObject {
         state = .initializing
         connectionStartTime = Date()
 
-        do {
-            await subscriptionManager.startSubscriptions()
+        await subscriptionManager.startSubscriptions()
 
-            state = .active
-            isConnected = true
-            reconnectAttempts = 0
+        state = .active
+        isConnected = true
+        reconnectAttempts = 0
 
-            // Update statistics
-            connectionStatistics.totalConnections += 1
-            connectionStatistics.successfulConnections += 1
-            connectionStatistics.lastConnectedAt = Date()
+        // Update statistics
+        connectionStatistics.totalConnections += 1
+        connectionStatistics.successfulConnections += 1
+        connectionStatistics.lastConnectedAt = Date()
 
-            // Start heartbeat monitoring
-            startHeartbeat()
+        // Start heartbeat monitoring
+        startHeartbeat()
 
-            logger.info("RealtimeManager started successfully")
-
-        } catch {
-            handleConnectionError(error)
-        }
+        logger.info("RealtimeManager started successfully")
     }
 
     /// Stop real-time synchronization

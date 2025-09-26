@@ -145,18 +145,18 @@ class NutritionLabelOCR: ObservableObject {
                 continuation.resume(throwing: OCRError.timeout)
             }
 
-            DispatchQueue.global(qos: .userInitiated).async {
+            Task.detached { [requestHandler, request] in
                 do {
                     try requestHandler.perform([request])
                     timeoutTask.cancel()
 
-                    guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                    guard let observations = request.results else {
                         continuation.resume(throwing: OCRError.noTextFound)
                         return
                     }
 
                     let processingTime = CFAbsoluteTimeGetCurrent() - startTime
-                    let result = self.processTextObservations(observations, processingTime: processingTime)
+                    let result = await self.processTextObservations(observations, processingTime: processingTime)
 
                     if result.hasText {
                         continuation.resume(returning: result)
@@ -198,8 +198,7 @@ class NutritionLabelOCR: ObservableObject {
         let requestHandler = VNImageRequestHandler(ciImage: ciImage, options: [:])
         try requestHandler.perform([request])
 
-        guard let results = request.results,
-              let observations = results as? [VNRecognizedTextObservation] else {
+        guard let observations = request.results else {
             throw OCRError.noTextFound
         }
 

@@ -368,10 +368,10 @@ class AuthManager: ObservableObject {
     // MARK: - Private Methods
 
     private func setupAuthStateObserver() {
-        // Observe changes from SupabaseManager
-        supabaseManager.$isAuthenticated
+        // Observe changes from SupabaseManager's published properties
+        supabaseManager.$_isAuthenticated
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] isAuth in
+            .sink { [weak self] (isAuth: Bool) in
                 self?.isAuthenticated = isAuth
                 if !isAuth {
                     Task { @MainActor in
@@ -382,9 +382,9 @@ class AuthManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        supabaseManager.$currentUser
+        supabaseManager.$_currentUser
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] user in
+            .sink { [weak self] (user: User?) in
                 self?.currentUser = user
                 if user != nil {
                     Task {
@@ -410,9 +410,12 @@ class AuthManager: ObservableObject {
 
     private func checkInitialAuthState() {
         Task {
+            let isAuth = await supabaseManager.isAuthenticated
+            let user = await supabaseManager.currentUser
+
             await MainActor.run {
-                self.isAuthenticated = supabaseManager.isAuthenticated
-                self.currentUser = supabaseManager.currentUser
+                self.isAuthenticated = isAuth
+                self.currentUser = user
                 self.updateAuthenticationState()
             }
         }

@@ -131,17 +131,17 @@ struct NutritionLabelScanView: View {
                 )
             }
         }
-        .onChange(of: extractionService.isProcessing) { isProcessing in
+        .onChange(of: extractionService.isProcessing) { oldValue, isProcessing in
             if isProcessing {
                 scanningStage = .processing
             }
         }
-        .onChange(of: extractionService.lastResult) { result in
+        .onChange(of: extractionService.lastResult) { oldValue, result in
             if result != nil && !extractionService.isProcessing {
                 scanningStage = .results
             }
         }
-        .onChange(of: extractionService.isProcessing) { isProcessing in
+        .onChange(of: extractionService.isProcessing) { oldValue, isProcessing in
             // Handle error state when processing stops without a result
             if !isProcessing && extractionService.lastResult == nil && extractionService.lastError != nil {
                 scanningStage = .error

@@ -475,7 +475,7 @@ struct FoodLogView: View {
                         displayedComponents: .date
                     )
                     .datePickerStyle(.graphical)
-                    .onChange(of: viewModel.selectedDate) { newDate in
+                    .onChange(of: viewModel.selectedDate) { oldDate, newDate in
                         // Load month data when month changes
                         Task {
                             await viewModel.loadDatesWithLogsForMonth(newDate)

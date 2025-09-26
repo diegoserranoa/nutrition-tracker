@@ -219,11 +219,11 @@ class OCRService: ObservableObject {
             processingProgress = 0.1
 
             // Step 2: Assess image quality if enabled
-            let qualityStartTime = Date()
+//            let qualityStartTime = Date()
             let qualityAssessment = config.enableQualityAnalysis ?
                 try await assessImageQuality(image) :
                 createBasicQualityAssessment()
-            let qualityTime = Date().timeIntervalSince(qualityStartTime)
+//            let qualityTime = Date().timeIntervalSince(qualityStartTime)
             processingProgress = 0.3
 
             // Check if quality meets minimum requirements
@@ -392,7 +392,7 @@ class OCRService: ObservableObject {
 
                 // Simple brightness check using average pixel values
                 let dataProvider = cgImage.dataProvider
-                guard let pixelData = dataProvider?.data else {
+                guard ((dataProvider?.data) != nil) else {
                     continuation.resume(returning: nil)
                     return
                 }

@@ -74,7 +74,7 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
     // Real-time subscriptions
     @Published var realtimeFoodLogs: [FoodLog] = []
     private var cancellables = Set<AnyCancellable>()
-    private var realtimeSubscription: RealtimeChannel?
+    private var realtimeSubscription: RealtimeChannelV2?
 
     // MARK: - Initialization
 
@@ -535,7 +535,9 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
     func unsubscribeFromFoodLogs() {
         logger.info("Unsubscribing from real-time food log updates")
 
-        realtimeSubscription?.unsubscribe()
+        Task {
+            await realtimeSubscription?.unsubscribe()
+        }
         realtimeSubscription = nil
         cancellables.removeAll()
     }
@@ -567,8 +569,8 @@ class FoodLogService: ObservableObject, FoodLogServiceProtocol {
     }
 
     deinit {
-        // Clean up subscriptions synchronously
-        realtimeSubscription?.unsubscribe()
+        // Note: RealtimeChannelV2.unsubscribe() is async, but deinit cannot be async
+        // The subscription will be cleaned up when the object is deallocated
         realtimeSubscription = nil
     }
 }

@@ -101,9 +101,9 @@ class CameraManager: NSObject, ObservableObject {
     func startSession() {
         guard !session.isRunning else { return }
 
-        Task.detached { [weak self] in
+        Task.detached { [session] in
             await MainActor.run {
-                self?.session.startRunning()
+                session.startRunning()
             }
         }
     }
@@ -112,9 +112,9 @@ class CameraManager: NSObject, ObservableObject {
     func stopSession() {
         guard session.isRunning else { return }
 
-        Task.detached { [weak self] in
+        Task.detached { [session] in
             await MainActor.run {
-                self?.session.stopRunning()
+                session.stopRunning()
             }
         }
     }
@@ -173,7 +173,7 @@ class CameraManager: NSObject, ObservableObject {
 
 // MARK: - AVCapturePhotoCaptureDelegate
 
-extension CameraManager: @preconcurrency AVCapturePhotoCaptureDelegate {
+extension CameraManager: AVCapturePhotoCaptureDelegate {
 
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         defer {

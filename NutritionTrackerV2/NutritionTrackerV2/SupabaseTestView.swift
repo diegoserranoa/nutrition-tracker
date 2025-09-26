@@ -14,6 +14,8 @@ struct SupabaseTestView: View {
     @State private var password = ""
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @State private var isAuthenticated = false
+    @State private var currentUser: User?
 
     var body: some View {
         NavigationView {
@@ -32,7 +34,7 @@ struct SupabaseTestView: View {
                 }
 
                 // Authentication Section
-                if !supabaseManager.isAuthenticated {
+                if !isAuthenticated {
                     VStack(spacing: 16) {
                         TextField("Email", text: $email)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -67,7 +69,7 @@ struct SupabaseTestView: View {
                             .foregroundColor(.green)
                             .bold()
 
-                        if let user = supabaseManager.currentUser {
+                        if let user = currentUser {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("User ID: \(user.id)")
                                 if let email = user.email {
@@ -128,17 +130,40 @@ struct SupabaseTestView: View {
         } message: {
             Text(alertMessage)
         }
+        .onAppear {
+            updateAuthState()
+        }
+        .onReceive(supabaseManager.$_isAuthenticated) { newIsAuthenticated in
+            self.isAuthenticated = newIsAuthenticated
+        }
+        .onReceive(supabaseManager.$_currentUser) { newCurrentUser in
+            self.currentUser = newCurrentUser
+        }
     }
 
     private var connectionStatusColor: Color {
-        supabaseManager.isAuthenticated ? .green : .orange
+        isAuthenticated ? .green : .orange
     }
 
     private var connectionStatusText: String {
-        if supabaseManager.isAuthenticated {
+        if isAuthenticated {
             return "Connected & Authenticated"
         } else {
             return "SDK Loaded - Not Authenticated"
+        }
+    }
+
+    // MARK: - Helper Methods
+
+    private func updateAuthState() {
+        Task {
+            let authState = await supabaseManager.isAuthenticated
+            let user = await supabaseManager.currentUser
+
+            await MainActor.run {
+                self.isAuthenticated = authState
+                self.currentUser = user
+            }
         }
     }
 

@@ -13,9 +13,9 @@ import OSLog
 // MARK: - Supabase Manager Protocol
 
 protocol SupabaseManagerProtocol {
-    var isAuthenticated: Bool { get }
-    var currentUser: User? { get }
-    var realtime: RealtimeClient { get }
+    var isAuthenticated: Bool { get async }
+    var currentUser: User? { get async }
+    var realtime: RealtimeClientV2 { get }
 
     func uploadFile(bucket: String, path: String, data: Data, contentType: String) async throws -> String
     func getPublicURL(bucket: String, path: String) throws -> String
@@ -77,7 +77,7 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
 
     // MARK: - Properties
 
-    private let supabaseManager: SupabaseManagerProtocol
+    nonisolated(unsafe) private let supabaseManager: SupabaseManagerProtocol
     private let logger = Logger(subsystem: "com.nutritiontracker.photoservice", category: "PhotoService")
     private let bucketName = "food-photos"
 
@@ -94,7 +94,7 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
     private let baseRetryDelay: TimeInterval = 1.0
 
     // Dependencies
-    private let imageProcessor: ImageProcessor
+    nonisolated(unsafe) private let imageProcessor: ImageProcessor
 
     // Configuration
     private struct Config {
@@ -106,7 +106,7 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
 
     // MARK: - Initialization
 
-    nonisolated init(supabaseManager: SupabaseManagerProtocol,
+    init(supabaseManager: SupabaseManagerProtocol,
          imageProcessor: ImageProcessor = ImageProcessor()) {
         self.supabaseManager = supabaseManager
         self.imageProcessor = imageProcessor
@@ -212,7 +212,7 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
 
         do {
             // Validate authentication
-            guard supabaseManager.isAuthenticated else {
+            guard await supabaseManager.isAuthenticated else {
                 throw DataServiceError.authenticationRequired
             }
 
@@ -357,8 +357,8 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
         // Create upload task for cancellation support
         let uploadTask = Task<PhotoUploadResult, Error> {
             // Validate authentication
-            guard supabaseManager.isAuthenticated,
-                  let currentUser = supabaseManager.currentUser else {
+            guard await supabaseManager.isAuthenticated,
+                  let currentUser = await supabaseManager.currentUser else {
                 throw DataServiceError.authenticationRequired
             }
 
@@ -469,15 +469,17 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
 
     // MARK: - Upload Cancellation
 
-    func cancelCurrentUpload() {
+    nonisolated func cancelCurrentUpload() {
         logger.info("Cancelling current photo upload")
-        currentUploadTask?.cancel()
-        currentUploadTask = nil
-        isUploading = false
-        isRetrying = false
-        retryCount = 0
-        uploadProgress = nil
-        currentError = DataServiceError.operationCancelled
+        Task { @MainActor in
+            currentUploadTask?.cancel()
+            currentUploadTask = nil
+            isUploading = false
+            isRetrying = false
+            retryCount = 0
+            uploadProgress = nil
+            currentError = DataServiceError.operationCancelled
+        }
     }
 
     // MARK: - Error Classification
@@ -574,8 +576,10 @@ class PhotoService: ObservableObject, PhotoServiceProtocol {
         return url
     }
 
-    func clearURLCache() {
-        urlCache.removeAll()
+    nonisolated func clearURLCache() {
+        Task { @MainActor in
+            urlCache.removeAll()
+        }
         logger.info("Photo URL cache cleared")
     }
 }
@@ -596,7 +600,7 @@ private extension Result where Success == PhotoUploadResult, Failure == Error {
 // MARK: - Singleton Access
 
 extension PhotoService {
-    nonisolated static let shared = PhotoService(
+    static let shared = PhotoService(
         supabaseManager: SupabaseManager.shared,
         imageProcessor: ImageProcessor()
     )
