@@ -32,6 +32,12 @@ struct AuthenticatedContentView: View {
     let viewContext: NSManagedObjectContext
     @StateObject private var authManager = AuthManager.shared
 
+    // Navigation state
+    @State private var showingFoodLog = false
+    @State private var showingProgress = false
+    @State private var showingScanner = false
+    @State private var showingSettings = false
+
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
         animation: .default)
@@ -64,37 +70,61 @@ struct AuthenticatedContentView: View {
                         GridItem(.flexible()),
                         GridItem(.flexible())
                     ], spacing: 16) {
-                        QuickActionCard(
-                            title: "Log Food",
-                            icon: "plus.circle.fill",
-                            color: .green
-                        ) {
-                            // TODO: Navigate to food logging
+                        NavigationLink(destination: FoodLogView()) {
+                            QuickActionCard(
+                                title: "Log Food",
+                                icon: "plus.circle.fill",
+                                color: .green
+                            )
                         }
+                        .buttonStyle(PlainButtonStyle())
 
-                        QuickActionCard(
-                            title: "View Progress",
-                            icon: "chart.line.uptrend.xyaxis",
-                            color: .blue
-                        ) {
-                            // TODO: Navigate to progress view
+                        NavigationLink(destination: DailyNutritionStatsView(
+                            summary: .sampleSummary,
+                            foodLogs: FoodLog.sampleLogs,
+                            date: Date()
+                        )) {
+                            QuickActionCard(
+                                title: "View Progress",
+                                icon: "chart.line.uptrend.xyaxis",
+                                color: .blue
+                            )
                         }
+                        .buttonStyle(PlainButtonStyle())
 
-                        QuickActionCard(
-                            title: "Scan Barcode",
-                            icon: "barcode.viewfinder",
-                            color: .orange
-                        ) {
-                            // TODO: Navigate to barcode scanner
+                        NavigationLink(destination: NutritionLabelScanView(
+                            onNutritionExtracted: { result in
+                                print("Nutrition extracted: \(result.summary)")
+                                // TODO: Handle nutrition extraction result
+                            },
+                            onFoodCreated: { food in
+                                Task {
+                                    do {
+                                        let foodService = FoodService()
+                                        let savedFood = try await foodService.createFood(food)
+                                        print("Food saved successfully: \(savedFood.name)")
+                                    } catch {
+                                        print("Failed to save food: \(error.localizedDescription)")
+                                    }
+                                }
+                            }
+                        )) {
+                            QuickActionCard(
+                                title: "Scan Label",
+                                icon: "doc.viewfinder",
+                                color: .orange
+                            )
                         }
+                        .buttonStyle(PlainButtonStyle())
 
-                        QuickActionCard(
-                            title: "Settings",
-                            icon: "gear",
-                            color: .purple
-                        ) {
-                            // TODO: Navigate to settings
+                        NavigationLink(destination: SettingsView()) {
+                            QuickActionCard(
+                                title: "Settings",
+                                icon: "gear",
+                                color: .purple
+                            )
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
 
                     Spacer()
@@ -195,26 +225,22 @@ struct QuickActionCard: View {
     let title: String
     let icon: String
     let color: Color
-    let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 32))
-                    .foregroundColor(color)
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 32))
+                .foregroundColor(color)
 
-                Text(title)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 120)
-            .background(Color(.systemGray6))
-            .cornerRadius(16)
+            Text(title)
+                .font(.headline)
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.center)
         }
-        .buttonStyle(PlainButtonStyle())
+        .frame(maxWidth: .infinity)
+        .frame(height: 120)
+        .background(Color(.systemGray6))
+        .cornerRadius(16)
     }
 }
 

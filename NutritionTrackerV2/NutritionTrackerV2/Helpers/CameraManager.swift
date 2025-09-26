@@ -38,13 +38,19 @@ class CameraManager: NSObject, ObservableObject {
 
     /// Request camera permission from the user
     func requestPermission() {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        print("CameraManager: Current permission status: \(status.rawValue)")
+
+        switch status {
         case .authorized:
+            print("CameraManager: Camera authorized, starting session")
             isAuthorized = true
             startSession()
         case .notDetermined:
+            print("CameraManager: Requesting camera permission")
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
+                    print("CameraManager: Permission granted: \(granted)")
                     self?.isAuthorized = granted
                     if granted {
                         self?.startSession()
@@ -52,8 +58,10 @@ class CameraManager: NSObject, ObservableObject {
                 }
             }
         case .denied, .restricted:
+            print("CameraManager: Camera access denied or restricted")
             isAuthorized = false
         @unknown default:
+            print("CameraManager: Unknown camera permission status")
             isAuthorized = false
         }
     }
@@ -74,7 +82,11 @@ class CameraManager: NSObject, ObservableObject {
 
         // Configure image quality and format
         if #available(iOS 16.0, *) {
-            settings.maxPhotoDimensions = .init(width: 1920, height: 1920)
+            // Use supported dimensions from the active format
+            if let device = device,
+               let supportedDimensions = device.activeFormat.supportedMaxPhotoDimensions.first {
+                settings.maxPhotoDimensions = supportedDimensions
+            }
         } else {
             settings.isHighResolutionPhotoEnabled = false
         }
@@ -99,23 +111,33 @@ class CameraManager: NSObject, ObservableObject {
 
     /// Start the camera session
     func startSession() {
-        guard !session.isRunning else { return }
+        guard !session.isRunning else {
+            print("CameraManager: Session already running")
+            return
+        }
+
+        print("CameraManager: Starting camera session...")
+        print("CameraManager: Session inputs: \(session.inputs.count), outputs: \(session.outputs.count)")
 
         Task.detached { [session] in
-            await MainActor.run {
-                session.startRunning()
-            }
+            // Start session on background queue - this is blocking
+            session.startRunning()
+            print("CameraManager: Session started, running: \(session.isRunning)")
         }
     }
 
     /// Stop the camera session
     func stopSession() {
-        guard session.isRunning else { return }
+        guard session.isRunning else {
+            print("CameraManager: Session not running")
+            return
+        }
 
+        print("CameraManager: Stopping camera session...")
         Task.detached { [session] in
-            await MainActor.run {
-                session.stopRunning()
-            }
+            // Stop session on background queue - this is blocking
+            session.stopRunning()
+            print("CameraManager: Session stopped")
         }
     }
 
@@ -147,7 +169,15 @@ class CameraManager: NSObject, ObservableObject {
 
                 // Configure photo output settings
                 if #available(iOS 16.0, *) {
-                    photoOutput.maxPhotoDimensions = .init(width: 1920, height: 1920)
+                    // Use the maximum supported dimensions from the active format
+                    let supportedDimensions = camera.activeFormat.supportedMaxPhotoDimensions
+                    if let maxDimensions = supportedDimensions.max(by: { $0.width * $0.height < $1.width * $1.height }) {
+                        photoOutput.maxPhotoDimensions = maxDimensions
+                        print("Using max photo dimensions: \(maxDimensions.width) x \(maxDimensions.height)")
+                    } else {
+                        // Fallback: don't set maxPhotoDimensions, use default
+                        print("Using default photo dimensions - no supported dimensions found")
+                    }
                 } else {
                     photoOutput.isHighResolutionCaptureEnabled = false
                 }

@@ -315,6 +315,7 @@ struct FoodListView: View {
             unsaturatedFat: nil,
             transFat: nil,
             sodium: extract("sodium"),
+            cholesterol: extract("cholesterol"),
             potassium: extract("potassium"),
             calcium: extract("calcium"),
             iron: extract("iron"),

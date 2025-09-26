@@ -24,6 +24,7 @@ struct FoodFormView: View {
     @StateObject private var viewModel = FoodFormViewModel()
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusedField: FoodFormField?
+    @State private var showSuccessToast = false
 
     var body: some View {
         NavigationView {
@@ -122,8 +123,16 @@ struct FoodFormView: View {
                     Button(action: {
                         Task {
                             viewModel.onSave = {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    onSave()
+                                // Show toast and dismiss after delay
+                                showSuccessToast = true
+
+                                // Hide toast after 2 seconds and dismiss view
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                    showSuccessToast = false
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        dismiss()
+                                        onSave()
+                                    }
                                 }
                             }
                             viewModel.onError = { error in
@@ -172,10 +181,41 @@ struct FoodFormView: View {
             } message: {
                 Text(viewModel.error?.localizedDescription ?? "Unknown error occurred")
             }
+            .overlay(alignment: .top) {
+                if showSuccessToast {
+                    successToast
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showSuccessToast)
+                }
+            }
         }
     }
 
     // MARK: - Helper Views
+
+    private var successToast: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.white)
+                .font(.title3)
+
+            Text(prefilledFood != nil ? "Food Updated!" : "Food Saved!")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.white)
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.green)
+                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
 
     @ViewBuilder
     private func nutrientField(_ label: String, value: Binding<String>, unit: String, field: FoodFormField) -> some View {

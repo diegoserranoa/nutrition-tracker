@@ -34,6 +34,7 @@ struct Food: Codable, Identifiable, Hashable, Timestamped {
 
     // Micronutrients (per serving) - all in mg unless specified
     let sodium: Double?
+    let cholesterol: Double?
     let potassium: Double?
     let calcium: Double?
     let iron: Double?
@@ -67,18 +68,19 @@ struct Food: Codable, Identifiable, Hashable, Timestamped {
         case barcode
         case description
         case servingSize = "serving_size"
-        case servingUnit = "serving_unit"
+        case servingUnit = "measurement_unit" // Maps to measurement_unit in DB
         case servingSizeGrams = "serving_size_grams"
         case calories
         case protein
-        case carbohydrates
-        case fat
-        case fiber
-        case sugar
+        case carbohydrates = "total_carbohydrate" // Maps to total_carbohydrate in DB
+        case fat = "total_fat" // Maps to total_fat in DB
+        case fiber = "dietary_fiber" // Maps to dietary_fiber in DB
+        case sugar = "total_sugars" // Maps to total_sugars in DB
         case saturatedFat = "saturated_fat"
         case unsaturatedFat = "unsaturated_fat"
         case transFat = "trans_fat"
         case sodium
+        case cholesterol
         case potassium
         case calcium
         case iron
@@ -87,9 +89,9 @@ struct Food: Codable, Identifiable, Hashable, Timestamped {
         case vitaminD = "vitamin_d"
         case vitaminE = "vitamin_e"
         case vitaminK = "vitamin_k"
-        case vitaminB1 = "vitamin_b1"
-        case vitaminB2 = "vitamin_b2"
-        case vitaminB3 = "vitamin_b3"
+        case vitaminB1 = "thiamin" // Maps to thiamin in DB
+        case vitaminB2 = "riboflavin" // Maps to riboflavin in DB
+        case vitaminB3 = "niacin" // Maps to niacin in DB
         case vitaminB6 = "vitamin_b6"
         case vitaminB12 = "vitamin_b12"
         case folate
@@ -102,6 +104,152 @@ struct Food: Codable, Identifiable, Hashable, Timestamped {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case createdBy = "created_by"
+    }
+
+    // Regular initializer
+    init(
+        id: UUID,
+        name: String,
+        brand: String? = nil,
+        barcode: String? = nil,
+        description: String? = nil,
+        servingSize: Double,
+        servingUnit: String,
+        servingSizeGrams: Double? = nil,
+        calories: Double,
+        protein: Double,
+        carbohydrates: Double,
+        fat: Double,
+        fiber: Double? = nil,
+        sugar: Double? = nil,
+        saturatedFat: Double? = nil,
+        unsaturatedFat: Double? = nil,
+        transFat: Double? = nil,
+        sodium: Double? = nil,
+        cholesterol: Double? = nil,
+        potassium: Double? = nil,
+        calcium: Double? = nil,
+        iron: Double? = nil,
+        vitaminA: Double? = nil,
+        vitaminC: Double? = nil,
+        vitaminD: Double? = nil,
+        vitaminE: Double? = nil,
+        vitaminK: Double? = nil,
+        vitaminB1: Double? = nil,
+        vitaminB2: Double? = nil,
+        vitaminB3: Double? = nil,
+        vitaminB6: Double? = nil,
+        vitaminB12: Double? = nil,
+        folate: Double? = nil,
+        magnesium: Double? = nil,
+        phosphorus: Double? = nil,
+        zinc: Double? = nil,
+        category: FoodCategory? = nil,
+        isVerified: Bool = false,
+        source: FoodSource = .userCreated,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        createdBy: UUID? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.brand = brand
+        self.barcode = barcode
+        self.description = description
+        self.servingSize = servingSize
+        self.servingUnit = servingUnit
+        self.servingSizeGrams = servingSizeGrams
+        self.calories = calories
+        self.protein = protein
+        self.carbohydrates = carbohydrates
+        self.fat = fat
+        self.fiber = fiber
+        self.sugar = sugar
+        self.saturatedFat = saturatedFat
+        self.unsaturatedFat = unsaturatedFat
+        self.transFat = transFat
+        self.sodium = sodium
+        self.cholesterol = cholesterol
+        self.potassium = potassium
+        self.calcium = calcium
+        self.iron = iron
+        self.vitaminA = vitaminA
+        self.vitaminC = vitaminC
+        self.vitaminD = vitaminD
+        self.vitaminE = vitaminE
+        self.vitaminK = vitaminK
+        self.vitaminB1 = vitaminB1
+        self.vitaminB2 = vitaminB2
+        self.vitaminB3 = vitaminB3
+        self.vitaminB6 = vitaminB6
+        self.vitaminB12 = vitaminB12
+        self.folate = folate
+        self.magnesium = magnesium
+        self.phosphorus = phosphorus
+        self.zinc = zinc
+        self.category = category
+        self.isVerified = isVerified
+        self.source = source
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.createdBy = createdBy
+    }
+
+    // Custom decoder to handle missing fields from database
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Required fields
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        servingSize = try container.decode(Double.self, forKey: .servingSize)
+        servingUnit = try container.decode(String.self, forKey: .servingUnit)
+        calories = try container.decode(Double.self, forKey: .calories)
+        protein = try container.decode(Double.self, forKey: .protein)
+        carbohydrates = try container.decode(Double.self, forKey: .carbohydrates)
+        fat = try container.decode(Double.self, forKey: .fat)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+
+        // Optional fields that might be missing from database
+        brand = try container.decodeIfPresent(String.self, forKey: .brand)
+        barcode = try container.decodeIfPresent(String.self, forKey: .barcode)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        servingSizeGrams = try container.decodeIfPresent(Double.self, forKey: .servingSizeGrams)
+
+        // Optional macronutrients
+        fiber = try container.decodeIfPresent(Double.self, forKey: .fiber)
+        sugar = try container.decodeIfPresent(Double.self, forKey: .sugar)
+        saturatedFat = try container.decodeIfPresent(Double.self, forKey: .saturatedFat)
+        unsaturatedFat = try container.decodeIfPresent(Double.self, forKey: .unsaturatedFat)
+        transFat = try container.decodeIfPresent(Double.self, forKey: .transFat)
+
+        // Optional micronutrients
+        sodium = try container.decodeIfPresent(Double.self, forKey: .sodium)
+        cholesterol = try container.decodeIfPresent(Double.self, forKey: .cholesterol)
+        potassium = try container.decodeIfPresent(Double.self, forKey: .potassium)
+        calcium = try container.decodeIfPresent(Double.self, forKey: .calcium)
+        iron = try container.decodeIfPresent(Double.self, forKey: .iron)
+        vitaminA = try container.decodeIfPresent(Double.self, forKey: .vitaminA)
+        vitaminC = try container.decodeIfPresent(Double.self, forKey: .vitaminC)
+        vitaminD = try container.decodeIfPresent(Double.self, forKey: .vitaminD)
+        vitaminE = try container.decodeIfPresent(Double.self, forKey: .vitaminE)
+        vitaminK = try container.decodeIfPresent(Double.self, forKey: .vitaminK)
+        vitaminB1 = try container.decodeIfPresent(Double.self, forKey: .vitaminB1)
+        vitaminB2 = try container.decodeIfPresent(Double.self, forKey: .vitaminB2)
+        vitaminB3 = try container.decodeIfPresent(Double.self, forKey: .vitaminB3)
+        vitaminB6 = try container.decodeIfPresent(Double.self, forKey: .vitaminB6)
+        vitaminB12 = try container.decodeIfPresent(Double.self, forKey: .vitaminB12)
+        folate = try container.decodeIfPresent(Double.self, forKey: .folate)
+        magnesium = try container.decodeIfPresent(Double.self, forKey: .magnesium)
+        phosphorus = try container.decodeIfPresent(Double.self, forKey: .phosphorus)
+        zinc = try container.decodeIfPresent(Double.self, forKey: .zinc)
+
+        // Fields not in database - provide defaults
+        category = try container.decodeIfPresent(FoodCategory.self, forKey: .category)
+        isVerified = try container.decodeIfPresent(Bool.self, forKey: .isVerified) ?? false
+        source = try container.decodeIfPresent(FoodSource.self, forKey: .source) ?? .userCreated
+        createdBy = try container.decodeIfPresent(UUID.self, forKey: .createdBy)
     }
 }
 
@@ -255,6 +403,7 @@ extension Food {
             unsaturatedFat: self.unsaturatedFat.map { $0 * multiplier },
             transFat: self.transFat.map { $0 * multiplier },
             sodium: self.sodium.map { $0 * multiplier },
+            cholesterol: self.cholesterol.map { $0 * multiplier },
             potassium: self.potassium.map { $0 * multiplier },
             calcium: self.calcium.map { $0 * multiplier },
             iron: self.iron.map { $0 * multiplier },
@@ -331,6 +480,7 @@ extension Food {
             unsaturatedFat: 0.1,
             transFat: 0,
             sodium: 1,
+            cholesterol: 0,
             potassium: 422,
             calcium: 6,
             iron: 0.3,
@@ -374,6 +524,7 @@ extension Food {
             unsaturatedFat: 2.6,
             transFat: 0,
             sodium: 74,
+            cholesterol: 85,
             potassium: 256,
             calcium: 15,
             iron: 1.04,

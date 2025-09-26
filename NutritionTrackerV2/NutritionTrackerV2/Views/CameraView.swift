@@ -79,6 +79,13 @@ struct CameraView: View {
         .navigationBarHidden(true)
         .onAppear {
             cameraManager.requestPermission()
+            // Ensure session starts if already authorized
+            if cameraManager.isAuthorized {
+                cameraManager.startSession()
+            }
+        }
+        .onDisappear {
+            cameraManager.stopSession()
         }
         .alert("Camera Permission Required", isPresented: $showingPermissionAlert) {
             Button("Settings") {
@@ -174,19 +181,28 @@ struct CameraPreviewView: UIViewRepresentable {
     let session: AVCaptureSession
 
     func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: UIScreen.main.bounds)
+        let view = UIView()
+        view.backgroundColor = UIColor.black
 
         let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-        previewLayer.frame = view.frame
         previewLayer.videoGravity = .resizeAspectFill
         view.layer.addSublayer(previewLayer)
+
+        print("CameraPreviewView: Created preview layer with session: \(session)")
+        print("CameraPreviewView: Session is running: \(session.isRunning)")
+        print("CameraPreviewView: Session inputs count: \(session.inputs.count)")
+        print("CameraPreviewView: Session outputs count: \(session.outputs.count)")
 
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
         if let previewLayer = uiView.layer.sublayers?.first as? AVCaptureVideoPreviewLayer {
-            previewLayer.frame = uiView.bounds
+            DispatchQueue.main.async {
+                previewLayer.frame = uiView.bounds
+                print("CameraPreviewView: Updated preview layer frame to: \(uiView.bounds)")
+                print("CameraPreviewView: Session is running: \(session.isRunning)")
+            }
         }
     }
 }

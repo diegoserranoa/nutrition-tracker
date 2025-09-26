@@ -19,6 +19,7 @@ struct OCRNutritionCorrectionView: View {
     @State private var showingValidationErrors = false
     @State private var validationErrors: [CorrectionValidationError] = []
     @State private var showingOriginalData = false
+    @State private var showSuccessToast = false
 
     var body: some View {
         NavigationView {
@@ -60,10 +61,12 @@ struct OCRNutritionCorrectionView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
-                        saveFood()
+                        Task {
+                            await handleSave()
+                        }
                     }
                     .fontWeight(.semibold)
-                    .disabled(!viewModel.isValid)
+                    .disabled(!viewModel.isValid || viewModel.isLoading)
                 }
             }
         }
@@ -77,6 +80,25 @@ struct OCRNutritionCorrectionView: View {
                 ForEach(validationErrors, id: \.field) { error in
                     Text("• \(error.message)")
                 }
+            }
+        }
+        .alert("Error", isPresented: .constant(viewModel.error != nil)) {
+            Button("OK") {
+                viewModel.error = nil
+            }
+        } message: {
+            Text(viewModel.error?.localizedDescription ?? "Unknown error occurred")
+        }
+        .overlay(alignment: .top) {
+            if showSuccessToast {
+                successToast
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showSuccessToast)
+            }
+        }
+        .overlay {
+            if viewModel.isLoading {
+                loadingOverlay
             }
         }
     }
@@ -254,6 +276,28 @@ struct OCRNutritionCorrectionView: View {
                     field: .sugar
                 )
             }
+
+            if viewModel.saturatedFat > 0 {
+                NutrientField(
+                    label: "Saturated Fat",
+                    value: $viewModel.saturatedFat,
+                    unit: "g",
+                    confidence: viewModel.saturatedFatConfidence,
+                    focusedField: $focusedField,
+                    field: .saturatedFat
+                )
+            }
+
+            if viewModel.transFat > 0 {
+                NutrientField(
+                    label: "Trans Fat",
+                    value: $viewModel.transFat,
+                    unit: "g",
+                    confidence: viewModel.transFatConfidence,
+                    focusedField: $focusedField,
+                    field: .transFat
+                )
+            }
         }
     }
 
@@ -302,6 +346,50 @@ struct OCRNutritionCorrectionView: View {
                     confidence: viewModel.potassiumConfidence,
                     focusedField: $focusedField,
                     field: .potassium
+                )
+            }
+
+            if viewModel.cholesterol > 0 {
+                NutrientField(
+                    label: "Cholesterol",
+                    value: $viewModel.cholesterol,
+                    unit: "mg",
+                    confidence: viewModel.cholesterolConfidence,
+                    focusedField: $focusedField,
+                    field: .cholesterol
+                )
+            }
+
+            if viewModel.vitaminA > 0 {
+                NutrientField(
+                    label: "Vitamin A",
+                    value: $viewModel.vitaminA,
+                    unit: "mcg",
+                    confidence: viewModel.vitaminAConfidence,
+                    focusedField: $focusedField,
+                    field: .vitaminA
+                )
+            }
+
+            if viewModel.vitaminC > 0 {
+                NutrientField(
+                    label: "Vitamin C",
+                    value: $viewModel.vitaminC,
+                    unit: "mg",
+                    confidence: viewModel.vitaminCConfidence,
+                    focusedField: $focusedField,
+                    field: .vitaminC
+                )
+            }
+
+            if viewModel.vitaminD > 0 {
+                NutrientField(
+                    label: "Vitamin D",
+                    value: $viewModel.vitaminD,
+                    unit: "mcg",
+                    confidence: viewModel.vitaminDConfidence,
+                    focusedField: $focusedField,
+                    field: .vitaminD
                 )
             }
         }
@@ -354,15 +442,17 @@ struct OCRNutritionCorrectionView: View {
                 .cornerRadius(10)
 
                 Button("Save Food Item") {
-                    saveFood()
+                    Task {
+                        await handleSave()
+                    }
                 }
                 .font(.headline)
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(viewModel.isValid ? Color.blue : Color.gray)
+                .background(viewModel.isValid && !viewModel.isLoading ? Color.blue : Color.gray)
                 .cornerRadius(10)
-                .disabled(!viewModel.isValid)
+                .disabled(!viewModel.isValid || viewModel.isLoading)
             }
 
             if !viewModel.isValid {
@@ -377,9 +467,55 @@ struct OCRNutritionCorrectionView: View {
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: -1)
     }
 
+    private var successToast: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.white)
+                .font(.title3)
+
+            Text("Food Saved!")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.white)
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.green)
+                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
+    private var loadingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ProgressView()
+                    .scaleEffect(1.2)
+                    .tint(.white)
+
+                Text("Saving Food...")
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+            .padding(32)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.black.opacity(0.8))
+            )
+        }
+    }
+
     // MARK: - Helper Methods
 
-    private func saveFood() {
+    private func handleSave() async {
         let errors = viewModel.validate()
         if !errors.isEmpty {
             validationErrors = errors
@@ -387,8 +523,17 @@ struct OCRNutritionCorrectionView: View {
             return
         }
 
-        let food = viewModel.createFood()
-        onSave(food)
+        if let savedFood = await viewModel.saveFood() {
+            // Show success toast
+            showSuccessToast = true
+
+            // Hide toast after 2 seconds and dismiss view
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                showSuccessToast = false
+                // Call onSave which will trigger dismiss from parent
+                onSave(savedFood)
+            }
+        }
     }
 
     private func confidenceColor(for confidence: Float) -> Color {
@@ -520,8 +665,8 @@ struct NutrientField: View {
 enum CorrectionField: Hashable {
     case name, brand, description
     case servingSize, servingUnit
-    case calories, protein, carbohydrates, fat, fiber, sugar
-    case sodium, calcium, iron, potassium
+    case calories, protein, carbohydrates, fat, fiber, sugar, saturatedFat, transFat
+    case sodium, calcium, iron, potassium, cholesterol, vitaminA, vitaminC, vitaminD
 }
 
 // MARK: - Validation Error
@@ -540,6 +685,14 @@ class OCRCorrectionViewModel: ObservableObject {
     @Published var brand: String = ""
     @Published var description: String = ""
 
+    // UI State
+    @Published var isLoading = false
+    @Published var error: Error?
+    @Published var saveSuccessful = false
+
+    // Services
+    private let foodService: FoodService
+
     // Serving Information
     @Published var servingSize: Double = 1.0
     @Published var servingUnit: String = "serving"
@@ -553,12 +706,18 @@ class OCRCorrectionViewModel: ObservableObject {
     @Published var fat: Double = 0.0
     @Published var fiber: Double = 0.0
     @Published var sugar: Double = 0.0
+    @Published var saturatedFat: Double = 0.0
+    @Published var transFat: Double = 0.0
 
     // Micronutrients
     @Published var sodium: Double = 0.0
     @Published var calcium: Double = 0.0
     @Published var iron: Double = 0.0
     @Published var potassium: Double = 0.0
+    @Published var cholesterol: Double = 0.0
+    @Published var vitaminA: Double = 0.0
+    @Published var vitaminC: Double = 0.0
+    @Published var vitaminD: Double = 0.0
 
     // Confidence scores
     @Published var caloriesConfidence: Double = 0.0
@@ -567,13 +726,20 @@ class OCRCorrectionViewModel: ObservableObject {
     @Published var fatConfidence: Double = 0.0
     @Published var fiberConfidence: Double = 0.0
     @Published var sugarConfidence: Double = 0.0
+    @Published var saturatedFatConfidence: Double = 0.0
+    @Published var transFatConfidence: Double = 0.0
     @Published var sodiumConfidence: Double = 0.0
     @Published var calciumConfidence: Double = 0.0
     @Published var ironConfidence: Double = 0.0
     @Published var potassiumConfidence: Double = 0.0
+    @Published var cholesterolConfidence: Double = 0.0
+    @Published var vitaminAConfidence: Double = 0.0
+    @Published var vitaminCConfidence: Double = 0.0
+    @Published var vitaminDConfidence: Double = 0.0
 
     var hasMicronutrients: Bool {
-        return sodium > 0 || calcium > 0 || iron > 0 || potassium > 0
+        return sodium > 0 || calcium > 0 || iron > 0 || potassium > 0 ||
+               cholesterol > 0 || vitaminA > 0 || vitaminC > 0 || vitaminD > 0
     }
 
     var isValid: Bool {
@@ -581,6 +747,12 @@ class OCRCorrectionViewModel: ObservableObject {
                servingSize > 0 &&
                !servingUnit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
                calories >= 0
+    }
+
+    // MARK: - Initialization
+
+    init(foodService: FoodService? = nil) {
+        self.foodService = foodService ?? FoodService()
     }
 
     func populateFromExtractionResult(_ result: NutritionExtractionResult) {
@@ -630,6 +802,16 @@ class OCRCorrectionViewModel: ObservableObject {
             self.sugarConfidence = Double(sugar.confidence)
         }
 
+        if let saturatedFat = nutrition.macronutrients.saturatedFat {
+            self.saturatedFat = saturatedFat.value
+            self.saturatedFatConfidence = Double(saturatedFat.confidence)
+        }
+
+        if let transFat = nutrition.macronutrients.transFat {
+            self.transFat = transFat.value
+            self.transFatConfidence = Double(transFat.confidence)
+        }
+
         // Micronutrients
         if let sodium = nutrition.micronutrients.sodium {
             self.sodium = sodium.value
@@ -649,6 +831,26 @@ class OCRCorrectionViewModel: ObservableObject {
         if let potassium = nutrition.micronutrients.potassium {
             self.potassium = potassium.value
             self.potassiumConfidence = Double(potassium.confidence)
+        }
+
+        if let cholesterol = nutrition.micronutrients.cholesterol {
+            self.cholesterol = cholesterol.value
+            self.cholesterolConfidence = Double(cholesterol.confidence)
+        }
+
+        if let vitaminA = nutrition.micronutrients.vitaminA {
+            self.vitaminA = vitaminA.value
+            self.vitaminAConfidence = Double(vitaminA.confidence)
+        }
+
+        if let vitaminC = nutrition.micronutrients.vitaminC {
+            self.vitaminC = vitaminC.value
+            self.vitaminCConfidence = Double(vitaminC.confidence)
+        }
+
+        if let vitaminD = nutrition.micronutrients.vitaminD {
+            self.vitaminD = vitaminD.value
+            self.vitaminDConfidence = Double(vitaminD.confidence)
         }
     }
 
@@ -686,6 +888,23 @@ class OCRCorrectionViewModel: ObservableObject {
         return errors
     }
 
+    func saveFood() async -> Food? {
+        isLoading = true
+        error = nil
+
+        do {
+            let food = createFood()
+            let savedFood = try await foodService.createFood(food)
+            saveSuccessful = true
+            isLoading = false
+            return savedFood
+        } catch {
+            self.error = error
+            isLoading = false
+            return nil
+        }
+    }
+
     func createFood() -> Food {
         return Food(
             id: UUID(),
@@ -702,16 +921,17 @@ class OCRCorrectionViewModel: ObservableObject {
             fat: fat,
             fiber: fiber > 0 ? fiber : nil,
             sugar: sugar > 0 ? sugar : nil,
-            saturatedFat: nil,
+            saturatedFat: saturatedFat > 0 ? saturatedFat : nil,
             unsaturatedFat: nil,
-            transFat: nil,
+            transFat: transFat > 0 ? transFat : nil,
             sodium: sodium > 0 ? sodium : nil,
+            cholesterol: cholesterol > 0 ? cholesterol : nil,
             potassium: potassium > 0 ? potassium : nil,
             calcium: calcium > 0 ? calcium : nil,
             iron: iron > 0 ? iron : nil,
-            vitaminA: nil,
-            vitaminC: nil,
-            vitaminD: nil,
+            vitaminA: vitaminA > 0 ? vitaminA : nil,
+            vitaminC: vitaminC > 0 ? vitaminC : nil,
+            vitaminD: vitaminD > 0 ? vitaminD : nil,
             vitaminE: nil,
             vitaminK: nil,
             vitaminB1: nil,

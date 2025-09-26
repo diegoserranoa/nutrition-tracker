@@ -44,6 +44,7 @@ class FoodFormViewModel: ObservableObject {
 
     // Micronutrients
     @Published var sodium: String = ""
+    @Published var cholesterol: String = ""
     @Published var potassium: String = ""
     @Published var calcium: String = ""
     @Published var iron: String = ""
@@ -68,6 +69,7 @@ class FoodFormViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var error: Error?
     @Published var showMoreNutrients = false
+    @Published var saveSuccessful = false
 
     // MARK: - Private Properties
 
@@ -137,6 +139,7 @@ class FoodFormViewModel: ObservableObject {
 
         // Micronutrients
         sodium = food.sodium?.description ?? ""
+        cholesterol = food.cholesterol?.description ?? ""
         potassium = food.potassium?.description ?? ""
         calcium = food.calcium?.description ?? ""
         iron = food.iron?.description ?? ""
@@ -194,6 +197,7 @@ class FoodFormViewModel: ObservableObject {
                     unsaturatedFat: updatedFood.unsaturatedFat,
                     transFat: updatedFood.transFat,
                     sodium: updatedFood.sodium,
+                    cholesterol: updatedFood.cholesterol,
                     potassium: updatedFood.potassium,
                     calcium: updatedFood.calcium,
                     iron: updatedFood.iron,
@@ -225,6 +229,7 @@ class FoodFormViewModel: ObservableObject {
             }
 
             logger.info("Successfully saved food: \(result.name)")
+            saveSuccessful = true
             onSave?()
 
         } catch {
@@ -267,6 +272,7 @@ class FoodFormViewModel: ObservableObject {
         transFat = ""
 
         sodium = ""
+        cholesterol = ""
         potassium = ""
         calcium = ""
         iron = ""
@@ -288,6 +294,7 @@ class FoodFormViewModel: ObservableObject {
 
         error = nil
         showMoreNutrients = false
+        saveSuccessful = false
     }
 
     // MARK: - Private Methods
@@ -322,6 +329,7 @@ class FoodFormViewModel: ObservableObject {
             unsaturatedFat: parseOptionalDouble(unsaturatedFat),
             transFat: parseOptionalDouble(transFat),
             sodium: parseOptionalDouble(sodium),
+            cholesterol: parseOptionalDouble(cholesterol),
             potassium: parseOptionalDouble(potassium),
             calcium: parseOptionalDouble(calcium),
             iron: parseOptionalDouble(iron),

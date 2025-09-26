@@ -75,8 +75,8 @@ class FoodService: ObservableObject, FoodServiceProtocol {
         defer { isLoading = false }
 
         do {
-            // Convert Food to AnyJSON dictionary for Supabase
-            let foodDict = try foodToAnyJSONDictionary(food)
+            // Convert Food to AnyJSON dictionary for Supabase (exclude ID for creation)
+            let foodDict = try foodToAnyJSONDictionary(food, includeId: false)
 
             let response: [Food] = try await supabaseManager
                 .from(tableName)
@@ -123,8 +123,8 @@ class FoodService: ObservableObject, FoodServiceProtocol {
         defer { isLoading = false }
 
         do {
-            // Convert Food to AnyJSON dictionary for Supabase
-            let foodDict = try foodToAnyJSONDictionary(food)
+            // Convert Food to AnyJSON dictionary for Supabase (include ID for updates)
+            let foodDict = try foodToAnyJSONDictionary(food, includeId: true)
 
             let response: [Food] = try await supabaseManager
                 .from(tableName)
@@ -290,53 +290,60 @@ class FoodService: ObservableObject, FoodServiceProtocol {
         return try AnyJSON(value)
     }
 
-    private func foodToAnyJSONDictionary(_ food: Food) throws -> [String: AnyJSON] {
+    private func foodToAnyJSONDictionary(_ food: Food, includeId: Bool = true) throws -> [String: AnyJSON] {
         let now = Date()
         let formatter = ISO8601DateFormatter()
 
-        return [
-            "id": AnyJSON.string(food.id.uuidString),
-            "name": AnyJSON.string(food.name),
-            "brand": food.brand.map(AnyJSON.string) ?? AnyJSON.null,
-            "barcode": food.barcode.map(AnyJSON.string) ?? AnyJSON.null,
-            "description": food.description.map(AnyJSON.string) ?? AnyJSON.null,
-            "serving_size": try AnyJSON(food.servingSize),
-            "serving_unit": AnyJSON.string(food.servingUnit),
-            "serving_size_grams": try doubleToAnyJSON(food.servingSizeGrams),
-            "calories": try AnyJSON(food.calories),
-            "protein": try AnyJSON(food.protein),
-            "carbohydrates": try AnyJSON(food.carbohydrates),
-            "fat": try AnyJSON(food.fat),
-            "fiber": try doubleToAnyJSON(food.fiber),
-            "sugar": try doubleToAnyJSON(food.sugar),
-            "saturated_fat": try doubleToAnyJSON(food.saturatedFat),
-            "unsaturated_fat": try doubleToAnyJSON(food.unsaturatedFat),
-            "trans_fat": try doubleToAnyJSON(food.transFat),
-            "sodium": try doubleToAnyJSON(food.sodium),
-            "potassium": try doubleToAnyJSON(food.potassium),
-            "calcium": try doubleToAnyJSON(food.calcium),
-            "iron": try doubleToAnyJSON(food.iron),
-            "vitamin_a": try doubleToAnyJSON(food.vitaminA),
-            "vitamin_c": try doubleToAnyJSON(food.vitaminC),
-            "vitamin_d": try doubleToAnyJSON(food.vitaminD),
-            "vitamin_e": try doubleToAnyJSON(food.vitaminE),
-            "vitamin_k": try doubleToAnyJSON(food.vitaminK),
-            "vitamin_b1": try doubleToAnyJSON(food.vitaminB1),
-            "vitamin_b2": try doubleToAnyJSON(food.vitaminB2),
-            "vitamin_b3": try doubleToAnyJSON(food.vitaminB3),
-            "vitamin_b6": try doubleToAnyJSON(food.vitaminB6),
-            "vitamin_b12": try doubleToAnyJSON(food.vitaminB12),
-            "folate": try doubleToAnyJSON(food.folate),
-            "magnesium": try doubleToAnyJSON(food.magnesium),
-            "phosphorus": try doubleToAnyJSON(food.phosphorus),
-            "zinc": try doubleToAnyJSON(food.zinc),
-            "category": food.category.map { AnyJSON.string($0.rawValue) } ?? AnyJSON.null,
-            "is_verified": AnyJSON.bool(food.isVerified),
-            "source": AnyJSON.string(food.source.rawValue),
-            "created_at": AnyJSON.string(formatter.string(from: food.createdAt)),
-            "updated_at": AnyJSON.string(formatter.string(from: now)),
-            "created_by": food.createdBy.map { AnyJSON.string($0.uuidString) } ?? AnyJSON.null
-        ]
+        var dict: [String: AnyJSON] = [:]
+
+        // Only include ID for updates, not for creation
+        if includeId {
+            dict["id"] = AnyJSON.string(food.id.uuidString)
+        }
+
+        dict["name"] = AnyJSON.string(food.name)
+        // dict["brand"] = food.brand.map(AnyJSON.string) ?? AnyJSON.null // TODO: Add brand column to Supabase schema
+        // dict["barcode"] = food.barcode.map(AnyJSON.string) ?? AnyJSON.null // TODO: Add barcode column to Supabase schema
+        // dict["description"] = food.description.map(AnyJSON.string) ?? AnyJSON.null // TODO: Add description column to Supabase schema
+        dict["serving_size"] = try AnyJSON(food.servingSize)
+        dict["measurement_unit"] = AnyJSON.string(food.servingUnit) // Maps to measurement_unit in DB
+        // dict["serving_size_grams"] = try doubleToAnyJSON(food.servingSizeGrams) // TODO: Add serving_size_grams column to Supabase schema
+        dict["calories"] = try AnyJSON(food.calories)
+        dict["protein"] = try AnyJSON(food.protein)
+        dict["total_carbohydrate"] = try AnyJSON(food.carbohydrates) // Maps to total_carbohydrate in DB
+        dict["total_fat"] = try AnyJSON(food.fat) // Maps to total_fat in DB
+        dict["dietary_fiber"] = try doubleToAnyJSON(food.fiber) // Maps to dietary_fiber in DB
+        dict["total_sugars"] = try doubleToAnyJSON(food.sugar) // Maps to total_sugars in DB
+        dict["saturated_fat"] = try doubleToAnyJSON(food.saturatedFat)
+        // dict["unsaturated_fat"] = try doubleToAnyJSON(food.unsaturatedFat) // TODO: Add unsaturated_fat column to Supabase schema
+        // dict["trans_fat"] = try doubleToAnyJSON(food.transFat) // TODO: Add trans_fat column to Supabase schema
+        dict["sodium"] = try doubleToAnyJSON(food.sodium)
+        dict["cholesterol"] = try doubleToAnyJSON(food.cholesterol)
+        dict["potassium"] = try doubleToAnyJSON(food.potassium)
+        dict["calcium"] = try doubleToAnyJSON(food.calcium)
+        dict["iron"] = try doubleToAnyJSON(food.iron)
+        dict["vitamin_a"] = try doubleToAnyJSON(food.vitaminA)
+        dict["vitamin_c"] = try doubleToAnyJSON(food.vitaminC)
+        dict["vitamin_d"] = try doubleToAnyJSON(food.vitaminD)
+        dict["vitamin_e"] = try doubleToAnyJSON(food.vitaminE)
+        dict["vitamin_k"] = try doubleToAnyJSON(food.vitaminK)
+        dict["thiamin"] = try doubleToAnyJSON(food.vitaminB1) // Maps to thiamin in DB
+        dict["riboflavin"] = try doubleToAnyJSON(food.vitaminB2) // Maps to riboflavin in DB
+        dict["niacin"] = try doubleToAnyJSON(food.vitaminB3) // Maps to niacin in DB
+        dict["vitamin_b6"] = try doubleToAnyJSON(food.vitaminB6)
+        dict["vitamin_b12"] = try doubleToAnyJSON(food.vitaminB12)
+        dict["folate"] = try doubleToAnyJSON(food.folate)
+        dict["magnesium"] = try doubleToAnyJSON(food.magnesium)
+        dict["phosphorus"] = try doubleToAnyJSON(food.phosphorus)
+        dict["zinc"] = try doubleToAnyJSON(food.zinc)
+        // dict["category"] = food.category.map { AnyJSON.string($0.rawValue) } ?? AnyJSON.null // TODO: Add category column to Supabase schema
+        // dict["is_verified"] = AnyJSON.bool(food.isVerified) // TODO: Add is_verified column to Supabase schema
+        // dict["source"] = AnyJSON.string(food.source.rawValue) // TODO: Add source column to Supabase schema
+        dict["created_at"] = AnyJSON.string(formatter.string(from: food.createdAt))
+        dict["updated_at"] = AnyJSON.string(formatter.string(from: now))
+        // dict["created_by"] = food.createdBy.map { AnyJSON.string($0.uuidString) } ?? AnyJSON.null // TODO: Add created_by column to Supabase schema
+
+        return dict
     }
 
     // MARK: - Preloading & Cache Management

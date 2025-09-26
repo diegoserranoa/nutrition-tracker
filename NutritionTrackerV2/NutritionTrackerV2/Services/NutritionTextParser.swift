@@ -33,6 +33,18 @@ struct ParsedNutritionData: Equatable {
         if macronutrients.protein != nil { items.append("protein") }
         if macronutrients.carbohydrates != nil { items.append("carbs") }
         if macronutrients.fat != nil { items.append("fat") }
+        if macronutrients.fiber != nil { items.append("fiber") }
+        if macronutrients.sugar != nil { items.append("sugar") }
+        if macronutrients.saturatedFat != nil { items.append("saturated fat") }
+        if macronutrients.transFat != nil { items.append("trans fat") }
+        if micronutrients.sodium != nil { items.append("sodium") }
+        if micronutrients.cholesterol != nil { items.append("cholesterol") }
+        if micronutrients.potassium != nil { items.append("potassium") }
+        if micronutrients.calcium != nil { items.append("calcium") }
+        if micronutrients.iron != nil { items.append("iron") }
+        if micronutrients.vitaminA != nil { items.append("vitamin A") }
+        if micronutrients.vitaminC != nil { items.append("vitamin C") }
+        if micronutrients.vitaminD != nil { items.append("vitamin D") }
         if servingInfo != nil { items.append("serving") }
 
         return items.isEmpty ? "No nutrition data found" : "Found: \(items.joined(separator: ", "))"

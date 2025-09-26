@@ -175,6 +175,7 @@ struct FoodDetailView_Previews: PreviewProvider {
             unsaturatedFat: 0.1,
             transFat: nil,
             sodium: nil,
+            cholesterol: 0,
             potassium: 2,
             calcium: 195,
             iron: 11,

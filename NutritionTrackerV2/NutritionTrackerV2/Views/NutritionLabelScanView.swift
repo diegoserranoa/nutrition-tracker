@@ -123,7 +123,8 @@ struct NutritionLabelScanView: View {
                     extractionResult: result,
                     onSave: { food in
                         onFoodCreated?(food)
-                        dismiss()
+                        showingCorrectionView = false
+                        dismiss() // Go back to Dashboard
                     },
                     onCancel: {
                         showingCorrectionView = false
@@ -384,6 +385,29 @@ struct NutritionLabelScanView: View {
                     .foregroundColor(.secondary)
             }
 
+            // Scanned image preview during processing
+            if let image = capturedImage {
+                VStack(spacing: 8) {
+                    Text("Processing Image")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+
+                    Button(action: { showingFullScreenImage = true }) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxHeight: 120)
+                            .cornerRadius(8)
+                            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+            }
+
             // Processing steps
             ProcessingStepsView(currentStage: extractionService.processingStage)
 
@@ -420,6 +444,11 @@ struct NutritionLabelScanView: View {
                     }
 
                     Spacer()
+                }
+
+                // Scanned image preview
+                if let image = capturedImage {
+                    ScannedImagePreviewCard(image: image, onTapToExpand: { showingFullScreenImage = true })
                 }
 
                 // Nutrition data preview
@@ -492,6 +521,29 @@ struct NutritionLabelScanView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
+            }
+
+            // Show the image that failed to process
+            if let image = capturedImage {
+                VStack(spacing: 8) {
+                    Text("Failed to Process")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+
+                    Button(action: { showingFullScreenImage = true }) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxHeight: 120)
+                            .cornerRadius(8)
+                            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
             }
 
             VStack(spacing: 12) {
@@ -869,6 +921,55 @@ struct ProcessingStepRow: View {
     }
 }
 
+struct ScannedImagePreviewCard: View {
+    let image: UIImage
+    let onTapToExpand: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "photo")
+                    .font(.headline)
+                    .foregroundColor(.blue)
+
+                Text("Scanned Image")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+
+                Spacer()
+
+                Button(action: onTapToExpand) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.caption)
+                        Text("Expand")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.blue)
+                }
+            }
+
+            Button(action: onTapToExpand) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxHeight: 150)
+                    .cornerRadius(8)
+                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+            }
+            .buttonStyle(.plain)
+
+            Text("Tap image to view full screen")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+    }
+}
+
 struct NutritionDataPreviewCard: View {
     let result: NutritionExtractionResult
 
@@ -890,6 +991,7 @@ struct NutritionDataPreviewCard: View {
                 )
             }
 
+            // Macronutrients
             if let protein = nutrition.macronutrients.protein {
                 ScanNutrientRow(
                     name: "Protein",
@@ -914,6 +1016,117 @@ struct NutritionDataPreviewCard: View {
                     value: String(format: "%.1f", fat.value),
                     unit: fat.unit,
                     confidence: Float(fat.confidence)
+                )
+            }
+
+            // Extended macronutrients
+            if let saturatedFat = nutrition.macronutrients.saturatedFat {
+                ScanNutrientRow(
+                    name: "Saturated Fat",
+                    value: String(format: "%.1f", saturatedFat.value),
+                    unit: saturatedFat.unit,
+                    confidence: Float(saturatedFat.confidence)
+                )
+            }
+
+            if let transFat = nutrition.macronutrients.transFat {
+                ScanNutrientRow(
+                    name: "Trans Fat",
+                    value: String(format: "%.1f", transFat.value),
+                    unit: transFat.unit,
+                    confidence: Float(transFat.confidence)
+                )
+            }
+
+            if let fiber = nutrition.macronutrients.fiber {
+                ScanNutrientRow(
+                    name: "Dietary Fiber",
+                    value: String(format: "%.1f", fiber.value),
+                    unit: fiber.unit,
+                    confidence: Float(fiber.confidence)
+                )
+            }
+
+            if let sugar = nutrition.macronutrients.sugar {
+                ScanNutrientRow(
+                    name: "Total Sugars",
+                    value: String(format: "%.1f", sugar.value),
+                    unit: sugar.unit,
+                    confidence: Float(sugar.confidence)
+                )
+            }
+
+            // Micronutrients
+            if let sodium = nutrition.micronutrients.sodium {
+                ScanNutrientRow(
+                    name: "Sodium",
+                    value: String(format: "%.0f", sodium.value),
+                    unit: sodium.unit,
+                    confidence: Float(sodium.confidence)
+                )
+            }
+
+            if let cholesterol = nutrition.micronutrients.cholesterol {
+                ScanNutrientRow(
+                    name: "Cholesterol",
+                    value: String(format: "%.0f", cholesterol.value),
+                    unit: cholesterol.unit,
+                    confidence: Float(cholesterol.confidence)
+                )
+            }
+
+            if let potassium = nutrition.micronutrients.potassium {
+                ScanNutrientRow(
+                    name: "Potassium",
+                    value: String(format: "%.0f", potassium.value),
+                    unit: potassium.unit,
+                    confidence: Float(potassium.confidence)
+                )
+            }
+
+            if let calcium = nutrition.micronutrients.calcium {
+                ScanNutrientRow(
+                    name: "Calcium",
+                    value: String(format: "%.0f", calcium.value),
+                    unit: calcium.unit,
+                    confidence: Float(calcium.confidence)
+                )
+            }
+
+            if let iron = nutrition.micronutrients.iron {
+                ScanNutrientRow(
+                    name: "Iron",
+                    value: String(format: "%.1f", iron.value),
+                    unit: iron.unit,
+                    confidence: Float(iron.confidence)
+                )
+            }
+
+            // Vitamins
+            if let vitaminA = nutrition.micronutrients.vitaminA {
+                ScanNutrientRow(
+                    name: "Vitamin A",
+                    value: String(format: "%.0f", vitaminA.value),
+                    unit: vitaminA.unit,
+                    confidence: Float(vitaminA.confidence)
+                )
+            }
+
+            if let vitaminC = nutrition.micronutrients.vitaminC {
+                ScanNutrientRow(
+                    name: "Vitamin C",
+                    value: String(format: "%.0f", vitaminC.value),
+                    unit: vitaminC.unit,
+                    confidence: Float(vitaminC.confidence)
+                )
+            }
+
+            if let vitaminD = nutrition.micronutrients.vitaminD {
+                ScanNutrientRow(
+                    name: "Vitamin D",
+                    value: String(format: "%.1f", vitaminD.value),
+                    unit: vitaminD.unit,
+                    confidence: Float(vitaminD.confidence)
                 )
             }
 
