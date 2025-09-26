@@ -73,7 +73,7 @@ struct FoodListView: View {
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                         .animation(.easeInOut(duration: 0.4), value: viewModel.error != nil)
                     } else if viewModel.foods.isEmpty && !viewModel.searchText.isEmpty {
-                        VStack(spacing: 16) {
+                        VStack(spacing: 4) {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 48))
                                 .foregroundColor(.gray)
@@ -376,10 +376,6 @@ struct FoodRowView: View {
             }
 
             Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.secondary)
         }
         .padding(.vertical, 2)
     }

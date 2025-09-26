@@ -6,17 +6,15 @@
 //
 
 import SwiftUI
-import CoreData
 
 struct ContentView: View {
-    @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var authManager = AuthManager.shared
 
     var body: some View {
         Group {
             if authManager.isUserAuthenticated {
                 // User is authenticated - show main app with tabs
-                AuthenticatedContentView(viewContext: viewContext)
+                AuthenticatedContentView()
             } else {
                 // User is not authenticated - show authentication flow
                 AuthenticationView()
@@ -29,7 +27,6 @@ struct ContentView: View {
 // MARK: - Authenticated Content
 
 struct AuthenticatedContentView: View {
-    let viewContext: NSManagedObjectContext
     @StateObject private var authManager = AuthManager.shared
 
     // Navigation state
@@ -38,10 +35,6 @@ struct AuthenticatedContentView: View {
     @State private var showingScanner = false
     @State private var showingSettings = false
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
-        animation: .default)
-    private var items: FetchedResults<Item>
 
     var body: some View {
         TabView {
@@ -87,7 +80,7 @@ struct AuthenticatedContentView: View {
                             QuickActionCard(
                                 title: "View Progress",
                                 icon: "chart.line.uptrend.xyaxis",
-                                color: .blue
+                                color: .purple
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -121,7 +114,7 @@ struct AuthenticatedContentView: View {
                             QuickActionCard(
                                 title: "Settings",
                                 icon: "gear",
-                                color: .purple
+                                color: .gray
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -147,76 +140,18 @@ struct AuthenticatedContentView: View {
                 Text("Home")
             }
 
-            // Core Data Items Tab (legacy)
+            // My Foods Tab
             NavigationView {
-                List {
-                    ForEach(items) { item in
-                        NavigationLink {
-                            Text("Item at \(item.timestamp!, formatter: itemFormatter)")
-                        } label: {
-                            Text(item.timestamp!, formatter: itemFormatter)
-                        }
-                    }
-                    .onDelete(perform: deleteItems)
-                }
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        EditButton()
-                    }
-                    ToolbarItem {
-                        Button(action: addItem) {
-                            Label("Add Item", systemImage: "plus")
-                        }
-                    }
-                }
-                .navigationTitle("Items")
+                FoodListView()
             }
             .tabItem {
-                Image(systemName: "list.bullet")
-                Text("Items")
+                Image(systemName: "list.bullet.rectangle")
+                Text("My Foods")
             }
 
-            // Testing tabs
-            SupabaseTestView()
-                .tabItem {
-                    Image(systemName: "network")
-                    Text("Supabase Test")
-                }
-
-            AuthTestView()
-                .tabItem {
-                    Image(systemName: "person.circle")
-                    Text("Auth Test")
-                }
         }
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-
-            do {
-                try viewContext.save()
-            } catch {
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-            }
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            offsets.map { items[$0] }.forEach(viewContext.delete)
-
-            do {
-                try viewContext.save()
-            } catch {
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-            }
-        }
-    }
 }
 
 // MARK: - Supporting Views
@@ -244,13 +179,7 @@ struct QuickActionCard: View {
     }
 }
 
-private let itemFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    formatter.timeStyle = .medium
-    return formatter
-}()
 
 #Preview {
-    ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+    ContentView()
 }

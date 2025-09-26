@@ -95,12 +95,6 @@ struct MainAppView: View {
                 Text("Profile")
             }
 
-            // Auth test tab (keeping for testing)
-            AuthTestView()
-                .tabItem {
-                    Image(systemName: "gear")
-                    Text("Auth Test")
-                }
         }
     }
 }
