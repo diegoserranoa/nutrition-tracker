@@ -111,7 +111,7 @@ class FoodListViewModel: ObservableObject {
         do {
             logger.info("Fetching foods from service (forceRefresh: \(forceRefresh))")
 
-            let searchParams = FoodSearchParameters(query: nil, limit: 100, offset: 0)
+            let searchParams = FoodSearchParameters(query: nil, limit: 200, offset: 0)
             let fetchedFoods = try await foodService.searchFoods(parameters: searchParams)
 
             foods = fetchedFoods.sorted { food1, food2 in
