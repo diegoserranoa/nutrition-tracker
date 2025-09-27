@@ -61,9 +61,61 @@ class FoodService: ObservableObject, FoodServiceProtocol {
     func createFood(_ food: Food) async throws -> Food {
         logger.info("Creating food: \(food.name)")
 
+        // Get the current authenticated user
+        guard let currentUser = await supabaseManager.currentUser else {
+            logger.error("Cannot create food: No authenticated user")
+            throw DataServiceError.authenticationRequired
+        }
+
+        // Create a copy of the food with the current user as creator
+        let foodWithCreator = Food(
+            id: food.id,
+            name: food.name,
+            brand: food.brand,
+            barcode: food.barcode,
+            description: food.description,
+            servingSize: food.servingSize,
+            servingUnit: food.servingUnit,
+            servingSizeGrams: food.servingSizeGrams,
+            calories: food.calories,
+            protein: food.protein,
+            carbohydrates: food.carbohydrates,
+            fat: food.fat,
+            fiber: food.fiber,
+            sugar: food.sugar,
+            saturatedFat: food.saturatedFat,
+            unsaturatedFat: food.unsaturatedFat,
+            transFat: food.transFat,
+            sodium: food.sodium,
+            cholesterol: food.cholesterol,
+            potassium: food.potassium,
+            calcium: food.calcium,
+            iron: food.iron,
+            vitaminA: food.vitaminA,
+            vitaminC: food.vitaminC,
+            vitaminD: food.vitaminD,
+            vitaminE: food.vitaminE,
+            vitaminK: food.vitaminK,
+            vitaminB1: food.vitaminB1,
+            vitaminB2: food.vitaminB2,
+            vitaminB3: food.vitaminB3,
+            vitaminB6: food.vitaminB6,
+            vitaminB12: food.vitaminB12,
+            folate: food.folate,
+            magnesium: food.magnesium,
+            phosphorus: food.phosphorus,
+            zinc: food.zinc,
+            category: food.category,
+            isVerified: food.isVerified,
+            source: food.source,
+            createdAt: food.createdAt,
+            updatedAt: Date(), // Set current time for updated_at
+            createdBy: currentUser.id // Set the current authenticated user as creator
+        )
+
         // Validate the food using the existing validation system
         do {
-            try food.validate()
+            try foodWithCreator.validate()
         } catch let error as DataServiceError {
             throw error
         } catch {
@@ -75,8 +127,8 @@ class FoodService: ObservableObject, FoodServiceProtocol {
         defer { isLoading = false }
 
         do {
-            // Convert Food to AnyJSON dictionary for Supabase (exclude ID for creation)
-            let foodDict = try foodToAnyJSONDictionary(food, includeId: false)
+            // Convert Food to AnyJSON dictionary for Supabase (exclude ID for creation, include created_by)
+            let foodDict = try foodToAnyJSONDictionary(foodWithCreator, includeId: false, includeCreatedBy: true)
 
             let response: [Food] = try await supabaseManager
                 .from(tableName)
@@ -123,8 +175,8 @@ class FoodService: ObservableObject, FoodServiceProtocol {
         defer { isLoading = false }
 
         do {
-            // Convert Food to AnyJSON dictionary for Supabase (include ID for updates)
-            let foodDict = try foodToAnyJSONDictionary(food, includeId: true)
+            // Convert Food to AnyJSON dictionary for Supabase (include ID for updates, but exclude created_by)
+            let foodDict = try foodToAnyJSONDictionary(food, includeId: true, includeCreatedBy: false)
 
             let response: [Food] = try await supabaseManager
                 .from(tableName)
@@ -233,8 +285,9 @@ class FoodService: ObservableObject, FoodServiceProtocol {
            !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            parameters.offset == 0,
            parameters.limit == 50 {
-            if let cachedResults = cacheService.getCachedSearchResults(query: searchQuery) {
-                logger.debug("Retrieved search results from cache for query: \(searchQuery)")
+            let sanitizedQuery = sanitizeSearchQuery(searchQuery)
+            if let cachedResults = cacheService.getCachedSearchResults(query: sanitizedQuery) {
+                logger.debug("Retrieved search results from cache for sanitized query: \(sanitizedQuery)")
                 return cachedResults
             }
         }
@@ -248,7 +301,9 @@ class FoodService: ObservableObject, FoodServiceProtocol {
 
             // Apply text search filter if provided
             if let searchQuery = parameters.query, !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                query = query.textSearch("name", query: searchQuery)
+                let sanitizedQuery = sanitizeSearchQuery(searchQuery)
+                // Use ilike for more flexible text search instead of tsquery which has strict syntax requirements
+                query = query.ilike("name", pattern: "%\(sanitizedQuery)%")
             }
 
             // Apply pagination
@@ -263,7 +318,8 @@ class FoodService: ObservableObject, FoodServiceProtocol {
                !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                parameters.offset == 0,
                parameters.limit == 50 {
-                cacheService.cacheSearchResults(query: searchQuery, results: response, ttl: 300) // 5 minutes TTL
+                let sanitizedQuery = sanitizeSearchQuery(searchQuery)
+                cacheService.cacheSearchResults(query: sanitizedQuery, results: response, ttl: 300) // 5 minutes TTL
             }
 
             // Also cache individual food items
@@ -290,7 +346,7 @@ class FoodService: ObservableObject, FoodServiceProtocol {
         return try AnyJSON(value)
     }
 
-    private func foodToAnyJSONDictionary(_ food: Food, includeId: Bool = true) throws -> [String: AnyJSON] {
+    private func foodToAnyJSONDictionary(_ food: Food, includeId: Bool = true, includeCreatedBy: Bool = true) throws -> [String: AnyJSON] {
         let now = Date()
         let formatter = ISO8601DateFormatter()
 
@@ -341,7 +397,11 @@ class FoodService: ObservableObject, FoodServiceProtocol {
         dict["source"] = AnyJSON.string(food.source.rawValue)
         dict["created_at"] = AnyJSON.string(formatter.string(from: food.createdAt))
         dict["updated_at"] = AnyJSON.string(formatter.string(from: now))
-        dict["created_by"] = food.createdBy.map { AnyJSON.string($0.uuidString) } ?? AnyJSON.null
+
+        // Only include created_by when explicitly requested (for creation, not updates)
+        if includeCreatedBy {
+            dict["created_by"] = food.createdBy.map { AnyJSON.string($0.uuidString) } ?? AnyJSON.null
+        }
 
         return dict
     }
@@ -384,5 +444,42 @@ class FoodService: ObservableObject, FoodServiceProtocol {
     func cleanupCache() {
         cacheService.cleanupExpiredEntries()
         logger.debug("Cleaned up expired cache entries")
+    }
+
+    /// Sanitize search query for PostgreSQL ILIKE pattern matching to prevent injection and errors
+    /// - Parameter query: The raw search query
+    /// - Returns: A sanitized query safe for PostgreSQL ILIKE patterns
+    private func sanitizeSearchQuery(_ query: String) -> String {
+        var sanitized = query
+
+        // Replace underscores with spaces (since _ represents spaces in the food names)
+        sanitized = sanitized.replacingOccurrences(of: "_", with: " ")
+
+        // Remove parentheses and their contents (brand information)
+        sanitized = sanitized.replacingOccurrences(of: "\\([^)]*\\)", with: "", options: .regularExpression)
+
+        // Escape special ILIKE pattern characters to prevent injection
+        // Note: % and _ are special in ILIKE patterns, but we don't expect them in food names after cleaning
+        sanitized = sanitized.replacingOccurrences(of: "%", with: "\\%")
+        // Don't escape underscores since we already converted them to spaces
+        sanitized = sanitized.replacingOccurrences(of: "'", with: "''")
+
+        // Remove other potentially problematic characters
+        let problematicChars = CharacterSet(charactersIn: "\\\"")
+        sanitized = sanitized.components(separatedBy: problematicChars).joined(separator: " ")
+
+        // Replace multiple spaces with single spaces
+        sanitized = sanitized.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+
+        // Trim whitespace
+        sanitized = sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // If the sanitized query is empty, return a safe fallback
+        if sanitized.isEmpty {
+            return query.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        logger.debug("Sanitized search query for ILIKE: '\(query)' -> '\(sanitized)'")
+        return sanitized
     }
 }

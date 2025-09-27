@@ -85,6 +85,8 @@ struct SmartFoodCaptureView: View {
         }
         .onAppear {
             startWorkflow()
+            // Automatically show camera when the view appears for immediate capture
+            showingCamera = true
         }
     }
 
@@ -230,9 +232,10 @@ struct SmartFoodCaptureView: View {
                     predictedFood: prediction,
                     confidence: workflow.recognitionConfidence,
                     showConfidence: workflow.showConfidenceToUser,
+                    detectedWeight: workflow.detectedWeight,
                     onAccept: {
                         // Find the food in the database and proceed to quantity entry
-                        findAndSelectFood(named: prediction)
+                        findAndSelectFood(named: prediction, detectedWeight: workflow.detectedWeight)
                     },
                     onReject: {
                         workflow.rejectPrediction()
@@ -459,34 +462,92 @@ struct SmartFoodCaptureView: View {
     private func startWorkflow() {
         workflow.startWorkflow { result in
             switch result {
-            case .success(let recognizedFood, _, _):
+            case .success(let recognizedFood, _, _, let detectedWeight):
                 print("✅ Workflow completed successfully: \(recognizedFood)")
-            case .lowConfidence(let recognizedFood, _, _):
+                findAndSelectFood(named: recognizedFood, detectedWeight: detectedWeight)
+            case .lowConfidence(let recognizedFood, _, _, _):
                 print("⚠️ Low confidence result: \(recognizedFood ?? "unknown")")
+                // The workflow will handle showing the review interface
             case .failed(let error, _):
                 print("❌ Workflow failed: \(error.localizedDescription)")
             case .cancelled:
                 print("❌ Workflow cancelled")
                 dismiss()
-            case .manualFallback(_):
+            case .manualFallback(_, let detectedWeight):
+                // Store detected weight for manual selection
+                if let weight = detectedWeight {
+                    prefillQuantityWithWeight(weight)
+                }
                 showingManualSelection = true
             }
         }
     }
 
-    private func findAndSelectFood(named foodName: String) {
+    private func findAndSelectFood(named foodName: String, detectedWeight: DetectedWeight? = nil) {
         // Search for the food in the database
         Task { @MainActor in
             await foodListViewModel.searchFoods(query: foodName)
 
             if let foundFood = foodListViewModel.foods.first {
                 selectedFood = foundFood
-                selectedUnit = availableUnits(for: foundFood).first ?? "serving"
+
+                // Prefill quantity and unit based on detected weight
+                if let weight = detectedWeight {
+                    prefillQuantityWithWeight(weight, for: foundFood)
+                } else {
+                    selectedUnit = availableUnits(for: foundFood).first ?? "serving"
+                    quantity = "1"
+                }
+
                 showingQuantityEntry = true
             } else {
                 // If not found in database, show manual selection instead
+                if let weight = detectedWeight {
+                    prefillQuantityWithWeight(weight)
+                }
                 showingManualSelection = true
             }
+        }
+    }
+
+    private func prefillQuantityWithWeight(_ weight: DetectedWeight, for food: Food? = nil) {
+        // Convert weight to appropriate unit for the food
+        if let food = food {
+            // Try to match the detected weight unit with food's serving unit
+            let availableUnits = availableUnits(for: food)
+
+            if availableUnits.contains(weight.unit.rawValue) {
+                // Direct unit match
+                selectedUnit = weight.unit.rawValue
+                quantity = formatQuantity(weight.value)
+            } else if weight.unit == .grams && availableUnits.contains("g") {
+                selectedUnit = "g"
+                quantity = formatQuantity(weight.value)
+            } else if let servingSizeGrams = food.servingSizeGrams, servingSizeGrams > 0 {
+                // Convert to servings based on food's serving size in grams
+                let totalGrams = weight.valueInGrams
+                let servings = totalGrams / servingSizeGrams
+                selectedUnit = food.servingUnit
+                quantity = formatQuantity(servings)
+            } else {
+                // Fallback to grams
+                selectedUnit = "g"
+                quantity = formatQuantity(weight.valueInGrams)
+            }
+        } else {
+            // No specific food, use detected weight as-is
+            selectedUnit = weight.unit.rawValue
+            quantity = formatQuantity(weight.value)
+        }
+
+        print("📏 Prefilled quantity from detected weight: \(quantity) \(selectedUnit)")
+    }
+
+    private func formatQuantity(_ value: Double) -> String {
+        if value == floor(value) {
+            return "\(Int(value))"
+        } else {
+            return String(format: "%.1f", value)
         }
     }
 

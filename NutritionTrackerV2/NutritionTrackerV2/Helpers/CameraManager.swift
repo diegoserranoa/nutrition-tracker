@@ -39,13 +39,16 @@ class CameraManager: NSObject, ObservableObject {
     /// Request camera permission from the user
     func requestPermission() {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
-        print("CameraManager: Current permission status: \(status.rawValue)")
+        print("CameraManager: Current permission status: \(status.rawValue) (\(statusDescription(status)))")
 
         switch status {
         case .authorized:
             print("CameraManager: Camera authorized, starting session")
             isAuthorized = true
-            startSession()
+            // Add small delay to ensure UI is ready
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.startSession()
+            }
         case .notDetermined:
             print("CameraManager: Requesting camera permission")
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
@@ -53,7 +56,13 @@ class CameraManager: NSObject, ObservableObject {
                     print("CameraManager: Permission granted: \(granted)")
                     self?.isAuthorized = granted
                     if granted {
-                        self?.startSession()
+                        print("CameraManager: Permission granted, starting session")
+                        // Add small delay to ensure UI is ready after permission dialog
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            self?.startSession()
+                        }
+                    } else {
+                        print("CameraManager: Permission denied by user")
                     }
                 }
             }
@@ -63,6 +72,16 @@ class CameraManager: NSObject, ObservableObject {
         @unknown default:
             print("CameraManager: Unknown camera permission status")
             isAuthorized = false
+        }
+    }
+
+    private func statusDescription(_ status: AVAuthorizationStatus) -> String {
+        switch status {
+        case .authorized: return "authorized"
+        case .denied: return "denied"
+        case .notDetermined: return "notDetermined"
+        case .restricted: return "restricted"
+        @unknown default: return "unknown"
         }
     }
 
@@ -109,6 +128,55 @@ class CameraManager: NSObject, ObservableObject {
         }
     }
 
+    /// Focus camera at a specific point
+    func focusAt(point: CGPoint) {
+        guard let device = device else { return }
+
+        do {
+            try device.lockForConfiguration()
+
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = point
+                device.focusMode = .autoFocus
+                print("CameraManager: Focus set to point: \(point)")
+            }
+
+            if device.isExposurePointOfInterestSupported {
+                device.exposurePointOfInterest = point
+                device.exposureMode = .autoExpose
+                print("CameraManager: Exposure set to point: \(point)")
+            }
+
+            device.unlockForConfiguration()
+        } catch {
+            print("CameraManager: Failed to set focus/exposure: \(error.localizedDescription)")
+        }
+    }
+
+    /// Reset focus and exposure to continuous auto mode
+    func resetFocus() {
+        guard let device = device else { return }
+
+        do {
+            try device.lockForConfiguration()
+
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                device.focusMode = .continuousAutoFocus
+            }
+
+            if device.isExposurePointOfInterestSupported {
+                device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                device.exposureMode = .continuousAutoExposure
+            }
+
+            device.unlockForConfiguration()
+            print("CameraManager: Focus and exposure reset to center")
+        } catch {
+            print("CameraManager: Failed to reset focus/exposure: \(error.localizedDescription)")
+        }
+    }
+
     /// Start the camera session
     func startSession() {
         guard !session.isRunning else {
@@ -119,10 +187,25 @@ class CameraManager: NSObject, ObservableObject {
         print("CameraManager: Starting camera session...")
         print("CameraManager: Session inputs: \(session.inputs.count), outputs: \(session.outputs.count)")
 
+        // Check if session is properly configured
+        if session.inputs.isEmpty {
+            print("CameraManager: ❌ No inputs configured, running setup again")
+            setupCamera()
+        }
+
         Task.detached { [session] in
             // Start session on background queue - this is blocking
+            print("CameraManager: About to start session...")
             session.startRunning()
-            print("CameraManager: Session started, running: \(session.isRunning)")
+
+            await MainActor.run {
+                print("CameraManager: Session started, running: \(session.isRunning)")
+                if !session.isRunning {
+                    print("CameraManager: ❌ Session failed to start!")
+                } else {
+                    print("CameraManager: ✅ Session started successfully")
+                }
+            }
         }
     }
 
@@ -144,28 +227,47 @@ class CameraManager: NSObject, ObservableObject {
     // MARK: - Private Methods
 
     private func setupCamera() {
+        print("CameraManager: Starting camera setup...")
+
         // Configure session for high quality photo capture
         session.sessionPreset = .photo
+        print("CameraManager: Set session preset to photo")
 
         // Setup camera device (prefer back camera)
         guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
-            print("Failed to get camera device")
+            print("CameraManager: ❌ Failed to get back camera device")
+            // Try front camera as fallback
+            if let frontCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) {
+                print("CameraManager: Using front camera as fallback")
+                self.device = frontCamera
+                setupCameraInput(frontCamera)
+            }
             return
         }
 
+        print("CameraManager: ✅ Got back camera device: \(camera.localizedName)")
         self.device = camera
+        setupCameraInput(camera)
+    }
 
+    private func setupCameraInput(_ camera: AVCaptureDevice) {
         do {
             // Setup device input
             let input = try AVCaptureDeviceInput(device: camera)
+
             if session.canAddInput(input) {
                 session.addInput(input)
                 deviceInput = input
+                print("CameraManager: ✅ Added camera input successfully")
+            } else {
+                print("CameraManager: ❌ Cannot add camera input to session")
+                return
             }
 
             // Setup photo output
             if session.canAddOutput(photoOutput) {
                 session.addOutput(photoOutput)
+                print("CameraManager: ✅ Added photo output successfully")
 
                 // Configure photo output settings
                 if #available(iOS 16.0, *) {
@@ -173,19 +275,23 @@ class CameraManager: NSObject, ObservableObject {
                     let supportedDimensions = camera.activeFormat.supportedMaxPhotoDimensions
                     if let maxDimensions = supportedDimensions.max(by: { $0.width * $0.height < $1.width * $1.height }) {
                         photoOutput.maxPhotoDimensions = maxDimensions
-                        print("Using max photo dimensions: \(maxDimensions.width) x \(maxDimensions.height)")
+                        print("CameraManager: Using max photo dimensions: \(maxDimensions.width) x \(maxDimensions.height)")
                     } else {
                         // Fallback: don't set maxPhotoDimensions, use default
-                        print("Using default photo dimensions - no supported dimensions found")
+                        print("CameraManager: Using default photo dimensions - no supported dimensions found")
                     }
                 } else {
                     photoOutput.isHighResolutionCaptureEnabled = false
+                    print("CameraManager: Set high resolution capture to false (iOS < 16)")
                 }
                 photoOutput.maxPhotoQualityPrioritization = .balanced
+                print("CameraManager: ✅ Camera setup completed successfully")
+            } else {
+                print("CameraManager: ❌ Cannot add photo output to session")
             }
 
         } catch {
-            print("Failed to setup camera: \(error)")
+            print("CameraManager: ❌ Failed to setup camera input: \(error.localizedDescription)")
         }
     }
 

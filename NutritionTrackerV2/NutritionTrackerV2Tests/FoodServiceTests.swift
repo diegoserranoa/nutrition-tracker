@@ -107,6 +107,42 @@ class FoodServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - Search Sanitization Tests
+
+    func testSearchQuerySanitization() async throws {
+        // Test the sanitization function with problematic queries that were causing tsquery syntax errors
+        let testQueries = [
+            "Almond_Butter_Granola_(Trader_Joe's)",  // Original problematic query with underscores and parentheses
+            "Almond Butter Granola",                  // Simplified version that was still failing
+            "Coffee (Starbucks)",                     // Parentheses with brand
+            "Protein_Bar_Chocolate",                  // Underscores without parentheses
+            "100% Orange Juice",                      // Percentage and special characters
+            "McDonald's French Fries",                // Apostrophe
+            "Ben & Jerry's Ice Cream",                // Ampersand and apostrophe
+            "test'quote\"double",                     // Quotes for injection testing
+            "normal search"                           // Normal case
+        ]
+
+        for query in testQueries {
+            // Test that search doesn't throw PostgreSQL syntax errors
+            let searchParams = FoodSearchParameters(query: query, limit: 5, offset: 0)
+
+            do {
+                // This should not throw a syntax error with the ILIKE implementation
+                let results = try await foodService.searchFoods(parameters: searchParams)
+                XCTAssertNotNil(results, "Search should return results array for query: '\(query)'")
+                // Results can be empty, but shouldn't throw syntax errors
+            } catch {
+                // Check that it's not a PostgreSQL syntax error
+                let errorDescription = error.localizedDescription.lowercased()
+                XCTAssertFalse(errorDescription.contains("syntax error"),
+                              "Search should not throw syntax errors for query: '\(query)'. Error: \(error)")
+                XCTAssertFalse(errorDescription.contains("tsquery"),
+                              "Search should not have tsquery errors for query: '\(query)'. Error: \(error)")
+            }
+        }
+    }
+
     // MARK: - Cache Service Tests
 
     func testCacheServiceIntegration() {

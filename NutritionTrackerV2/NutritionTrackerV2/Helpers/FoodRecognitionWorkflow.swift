@@ -43,11 +43,11 @@ struct FoodRecognitionConfig {
 
 /// Result of food recognition workflow
 enum FoodRecognitionResult {
-    case success(recognizedFood: String, confidence: Double, image: UIImage)
-    case lowConfidence(recognizedFood: String?, confidence: Double?, image: UIImage)
+    case success(recognizedFood: String, confidence: Double, image: UIImage, detectedWeight: DetectedWeight?)
+    case lowConfidence(recognizedFood: String?, confidence: Double?, image: UIImage, detectedWeight: DetectedWeight?)
     case failed(error: FoodRecognitionError, image: UIImage?)
     case cancelled
-    case manualFallback(image: UIImage)
+    case manualFallback(image: UIImage, detectedWeight: DetectedWeight?)
 }
 
 /// Errors that can occur during food recognition workflow
@@ -117,12 +117,14 @@ class FoodRecognitionWorkflow: ObservableObject {
     @Published var capturedImage: UIImage?
     @Published var recognitionResult: String?
     @Published var recognitionConfidence: Double = 0.0
+    @Published var detectedWeight: DetectedWeight?
     @Published var isProcessing: Bool = false
 
     // MARK: - Private Properties
 
     private let config: FoodRecognitionConfig
     private let classifier: FoodImageClassifier
+    private let weightDetectionService = WeightDetectionService()
     private var workflowCompletion: ((FoodRecognitionResult) -> Void)?
     private var processingStartTime: Date?
 
@@ -185,7 +187,8 @@ class FoodRecognitionWorkflow: ObservableObject {
         let result = FoodRecognitionResult.success(
             recognizedFood: foodName,
             confidence: recognitionConfidence,
-            image: image
+            image: image,
+            detectedWeight: detectedWeight
         )
         finishWorkflow(with: result)
     }
@@ -197,7 +200,7 @@ class FoodRecognitionWorkflow: ObservableObject {
 
         if config.allowManualFallback {
             state = .selectingFoodManually
-            let result = FoodRecognitionResult.manualFallback(image: image)
+            let result = FoodRecognitionResult.manualFallback(image: image, detectedWeight: detectedWeight)
             finishWorkflow(with: result)
         } else {
             // Restart workflow
@@ -226,25 +229,45 @@ class FoodRecognitionWorkflow: ObservableObject {
     private func performMLRecognition(image: UIImage, timeoutTask: Task<Void, Error>) async {
         state = .recognizingFood
 
-        await withCheckedContinuation { continuation in
-            classifier.classify(image: image) { [weak self] result in
-                Task { @MainActor in
-                    timeoutTask.cancel()
-                    self?.handleRecognitionResult(result, continuation: continuation)
-                }
+        // Run food recognition and weight detection in parallel
+        async let foodRecognitionTask = performFoodRecognition(image: image)
+        async let weightDetectionTask = performWeightDetection(image: image)
+
+        let (foodResult, weightResult) = await (foodRecognitionTask, weightDetectionTask)
+
+        timeoutTask.cancel()
+        await handleCombinedResults(foodResult: foodResult, weightResult: weightResult)
+    }
+
+    private func performFoodRecognition(image: UIImage) async -> String? {
+        return await withCheckedContinuation { continuation in
+            classifier.classify(image: image) { result in
+                continuation.resume(returning: result)
             }
         }
     }
 
-    private func handleRecognitionResult(_ result: String?, continuation: CheckedContinuation<Void, Never>) {
+    private func performWeightDetection(image: UIImage) async -> DetectedWeight? {
+        do {
+            let result = try await weightDetectionService.detectWeight(from: image)
+            return result.bestWeight
+        } catch {
+            print("⚠️ Weight detection failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func handleCombinedResults(foodResult: String?, weightResult: DetectedWeight?) async {
         isProcessing = false
         let processingTime = processingStartTime?.timeIntervalSinceNow.magnitude ?? 0
 
-        guard let foodName = result else {
+        // Store the detected weight
+        detectedWeight = weightResult
+
+        guard let foodName = foodResult else {
             print("❌ ML recognition failed")
             state = .error(.mlModelError("No food detected in image"))
             finishWorkflow(with: .failed(error: .mlModelError("No food detected in image"), image: capturedImage))
-            continuation.resume()
             return
         }
 
@@ -254,20 +277,23 @@ class FoodRecognitionWorkflow: ObservableObject {
         recognitionResult = foodName
         recognitionConfidence = confidence
 
-        print("✅ ML recognition completed in \(String(format: "%.2f", processingTime))s: \(foodName) (confidence: \(String(format: "%.2f", confidence)))")
+        // Log results
+        var logMessage = "✅ ML recognition completed in \(String(format: "%.2f", processingTime))s: \(foodName) (confidence: \(String(format: "%.2f", confidence)))"
+        if let weight = weightResult {
+            logMessage += ", detected weight: \(weight.displayString)"
+        }
+        print(logMessage)
 
         if confidence >= config.confidenceThreshold {
             // High confidence - proceed directly to logging
             state = .loggingFood
             guard let image = capturedImage else { return }
-            finishWorkflow(with: .success(recognizedFood: foodName, confidence: confidence, image: image))
+            finishWorkflow(with: .success(recognizedFood: foodName, confidence: confidence, image: image, detectedWeight: weightResult))
         } else {
             // Low confidence - show review interface
             state = .reviewingPrediction
             print("⚠️ Low confidence prediction, showing review interface")
         }
-
-        continuation.resume()
     }
 
     private func handleRecognitionTimeout() {

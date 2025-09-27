@@ -12,6 +12,7 @@ struct FoodPredictionReviewView: View {
     let predictedFood: String
     let confidence: Double
     let showConfidence: Bool
+    let detectedWeight: DetectedWeight?
     let onAccept: () -> Void
     let onReject: () -> Void
     let onRetry: () -> Void
@@ -111,6 +112,11 @@ struct FoodPredictionReviewView: View {
                     confidenceIndicator
                 }
 
+                // Weight detection indicator
+                if let weight = detectedWeight {
+                    weightDetectionIndicator(weight: weight)
+                }
+
                 // Helpful text
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -124,7 +130,13 @@ struct FoodPredictionReviewView: View {
                         Spacer()
                     }
 
-                    Text("Does this look correct? You can accept the prediction, try again, or select the food manually.")
+                    let helpText = if detectedWeight != nil {
+                        "Review the food prediction and detected weight. You can accept, try again, or select manually."
+                    } else {
+                        "Does this look correct? You can accept the prediction, try again, or select the food manually."
+                    }
+
+                    Text(helpText)
                         .font(.footnote)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.leading)
@@ -166,6 +178,74 @@ struct FoodPredictionReviewView: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .background(confidenceColor.opacity(0.1))
+        .cornerRadius(8)
+    }
+
+    private func weightDetectionIndicator(weight: DetectedWeight) -> some View {
+        HStack {
+            Image(systemName: weightIconName(for: weight))
+                .foregroundColor(weightColor(for: weight))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Detected Weight")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 4) {
+                    Text(weight.displayString)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(weightColor(for: weight))
+
+                    if weight.originalText.contains("M[") && weight.originalText.contains("]PCS context") {
+                        Image(systemName: "scope")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                }
+
+                if weight.confidence > 0 {
+                    Text("\(Int(weight.confidence * 100))% confidence")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer()
+
+            // Weight source indicator
+            VStack(alignment: .trailing, spacing: 2) {
+                if weight.originalText.contains("M[") && weight.originalText.contains("]PCS context") {
+                    HStack(spacing: 4) {
+                        Text("M")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.2))
+                            .cornerRadius(4)
+
+                        Text("PCS")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.2))
+                            .cornerRadius(4)
+                    }
+                    Text("Scale Context")
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                } else {
+                    Text("OCR Detection")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(weightColor(for: weight).opacity(0.1))
         .cornerRadius(8)
     }
 
@@ -286,6 +366,24 @@ struct FoodPredictionReviewView: View {
             return "\(percentage)% - Low"
         }
     }
+
+    private func weightIconName(for weight: DetectedWeight) -> String {
+        if weight.originalText.contains("M[") && weight.originalText.contains("]PCS context") {
+            return "scalemass.fill"  // Scale icon for contextual detection
+        } else {
+            return "camera.viewfinder"  // Camera/OCR icon for general detection
+        }
+    }
+
+    private func weightColor(for weight: DetectedWeight) -> Color {
+        if weight.confidence >= 0.8 {
+            return .green
+        } else if weight.confidence >= 0.6 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
 }
 
 // MARK: - Preview
@@ -300,6 +398,13 @@ struct FoodPredictionReviewView_Previews: PreviewProvider {
                 predictedFood: "grilled chicken breast",
                 confidence: 0.89,
                 showConfidence: true,
+                detectedWeight: DetectedWeight(
+                    value: 354.2,
+                    unit: .grams,
+                    confidence: 0.95,
+                    boundingBox: CGRect(x: 0, y: 0, width: 100, height: 50),
+                    originalText: "M[3542]PCS context"
+                ),
                 onAccept: { print("Accepted") },
                 onReject: { print("Rejected") },
                 onRetry: { print("Retry") },
@@ -313,6 +418,13 @@ struct FoodPredictionReviewView_Previews: PreviewProvider {
                 predictedFood: "vegetable stir fry",
                 confidence: 0.45,
                 showConfidence: true,
+                detectedWeight: DetectedWeight(
+                    value: 123.4,
+                    unit: .grams,
+                    confidence: 0.67,
+                    boundingBox: CGRect(x: 0, y: 0, width: 80, height: 40),
+                    originalText: "1234g OCR"
+                ),
                 onAccept: { print("Accepted") },
                 onReject: { print("Rejected") },
                 onRetry: { print("Retry") },
@@ -326,6 +438,7 @@ struct FoodPredictionReviewView_Previews: PreviewProvider {
                 predictedFood: "pizza margherita",
                 confidence: 0.75,
                 showConfidence: false,
+                detectedWeight: nil,
                 onAccept: { print("Accepted") },
                 onReject: { print("Rejected") },
                 onRetry: { print("Retry") },
